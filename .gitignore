@@ -1,0 +1,91 @@
+# ==========================================
+# Node.js & Dependencies (Shared)
+# ==========================================
+node_modules/
+/node_modules
+.npm/
+.eslintcache
+.stylelintcache
+*.jsbundle
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==========================================
+# Environment Variables & Secrets (CRITICAL)
+# ==========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.keystore
+*.jks
+*.p12
+*.p8
+*.mobileprovision
+
+# ==========================================
+# React Native - Android
+# ==========================================
+android/app/build/
+android/.gradle/
+android/local.properties
+android/GeneratedPluginRegistrant.java
+.navigation/
+captures/
+
+# ==========================================
+# React Native - iOS & Xcode
+# ==========================================
+ios/DerivedData/
+ios/build/
+ios/Pods/
+ios/.xcode.env.local
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+project.xcworkspace/
+*.xcuserstate
+*.hmap
+*.ipa
+*.dSYM/
+
+# ==========================================
+# Expo (If applicable)
+# ==========================================
+.expo/
+dist/
+web-build/
+
+# ==========================================
+# Editor & System Files
+# ==========================================
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
