@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import {
   View,
   Text,
@@ -6,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import {
   Ionicons,
@@ -15,18 +17,18 @@ import {
 } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import axios from "axios";
 
 interface FarmNodeTypes {
-  name: string;
-  imageUrl: string;
-  sensorValues: sensorValuesTypes;
-}
-
-interface sensorValuesTypes {
-  temperature: string;
-  humidity: string;
-  ph: string;
-  tds: string;
+  node_name: string;
+  min_temperature: string;
+  min_humidity: string;
+  min_ph: string;
+  min_tds: string;
+  max_temperature: string;
+  max_humidity: string;
+  max_ph: string;
+  max_tds: string;
 }
 
 const imageMap: Record<string, any> = {
@@ -35,42 +37,42 @@ const imageMap: Record<string, any> = {
 
 export default function FarmDashboard() {
   const router = useRouter();
-  const [farmNodes, setFarmNodes] = useState([
-    {
-      name: "Tomato Greenhouse",
-      imageUrl: "salad.jpg",
-      sensorValues: {
-        temperature: "67",
-        humidity: "67",
-        ph: "5.5",
-        tds: "660",
-      },
-    },
-    {
-      name: "Lettuce Greenhouse",
-      imageUrl: "salad.jpg",
-      sensorValues: {
-        temperature: "68",
-        humidity: "70",
-        ph: "6.5",
-        tds: "540",
-      },
-    },
-    {
-      name: "Tomato Greenhouse",
-      imageUrl: "salad.jpg",
-      sensorValues: {
-        temperature: "67",
-        humidity: "67",
-        ph: "5.5",
-        tds: "660",
-      },
-    },
-  ]);
+  const [farmNodes, setFarmNodes] = useState<FarmNodeTypes[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string>("");
 
-  useEffect(() => {
-    // fetch all the nodes or maybe don't fetch
-  });
+  useFocusEffect(
+    useCallback(() => {
+      async function fetchFunction() {
+        try {
+          setIsLoading(true);
+          setError("");
+
+          const response = await axios.get(
+            `${process.env.EXPO_PUBLIC_SERVER}:3000/api/node/getAllNodes`,
+          );
+
+          setFarmNodes(response.data.data);
+        } catch (error: any) {
+          setError(error.message);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+
+      fetchFunction();
+    }, [])
+  );
+
+  if (error) {
+    return (
+      <SafeAreaView className="flex-1 bg-background">
+        <View className="w-full h-full flex items-center justify-center">
+          <Text>{error}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-background">
@@ -101,7 +103,7 @@ export default function FarmDashboard() {
             </Text>
           </View>
 
-          <Pressable 
+          <Pressable
             className="flex flex-row items-center space-x-2 px-4 py-2.5 rounded-pill bg-primary active:opacity-90 shadow-sm"
             onPress={() => router.push("/Screens/addNewNodeScreen")}
           >
@@ -114,18 +116,25 @@ export default function FarmDashboard() {
 
         {/* Farm Nodes List */}
         <View>
-          {farmNodes.map((node, idx) => (
-            <View key={idx}>
-              <FarmNode {...node} />
+          {isLoading ? (
+            <View className="flex-1 justify-center items-center">
+              <ActivityIndicator size="large" color="#0000ff" />
+              <Text className="mt-10 text-sm">Loading assets...</Text>
             </View>
-          ))}
+          ) : (
+            farmNodes.map((node, idx) => (
+              <View key={idx}>
+                <FarmNode name={node.node_name} imageUrl="salad.jpg" />
+              </View>
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function FarmNode({ name, imageUrl, sensorValues }: FarmNodeTypes) {
+function FarmNode({ name, imageUrl }: { name: string; imageUrl: string }) {
   const icons: any = [
     <MaterialCommunityIcons name="thermometer" size={20} color="#111827" />,
     <Ionicons name="water" size={20} color="#111827" />,
@@ -133,6 +142,13 @@ function FarmNode({ name, imageUrl, sensorValues }: FarmNodeTypes) {
     <FontAwesome5 name="water" size={20} color="#111827" />,
   ];
   const units = ["°F", "%", "pH", " ppm"];
+
+  const sensorValues = {
+    temperature: 67,
+    humidity: 85,
+    ph: 5.5,
+    tds: 660
+  }
 
   return (
     <View className="px-6 mb-5">
@@ -158,7 +174,7 @@ function FarmNode({ name, imageUrl, sensorValues }: FarmNodeTypes) {
                 {icons[idx]}
               </View>
               <Text className="text-white font-bold text-base">
-                {value}
+                67
                 {units[idx]}
               </Text>
               <Text className="text-gray-300 text-xs">{sensor}</Text>
