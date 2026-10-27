@@ -1,5 +1,4 @@
-import React, { useCallback, useState } from "react";
-import { useFocusEffect } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,17 +16,18 @@ import {
 } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import axios from "axios";
+import { useFarmNodeStore } from "@/store/farmNodeStore";
 
 interface FarmNodeTypes {
+  node_id: string;
   node_name: string;
   min_temperature: string;
   min_humidity: string;
-  min_ph: string;
+  min_pH: string;
   min_tds: string;
   max_temperature: string;
   max_humidity: string;
-  max_ph: string;
+  max_pH: string;
   max_tds: string;
 }
 
@@ -37,38 +37,15 @@ const imageMap: Record<string, any> = {
 
 export default function FarmDashboard() {
   const router = useRouter();
-  const [farmNodes, setFarmNodes] = useState<FarmNodeTypes[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string>("");
 
-  useFocusEffect(
-    useCallback(() => {
-      async function fetchFunction() {
-        try {
-          setIsLoading(true);
-          setError("");
+  const farmNodes = useFarmNodeStore((state) => state.nodes);
+  const isLoading = useFarmNodeStore((state) => state.loading);
 
-          const response = await axios.get(
-            `${process.env.EXPO_PUBLIC_SERVER}:3000/api/node/getAllNodes`,
-          );
-
-          setFarmNodes(response.data.data);
-        } catch (error: any) {
-          setError(error.message);
-        } finally {
-          setIsLoading(false);
-        }
-      }
-
-      fetchFunction();
-    }, [])
-  );
-
-  if (error) {
+  if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <View className="w-full h-full flex items-center justify-center">
-          <Text>{error}</Text>
+          <Text>Fetching farm nodes...</Text>
         </View>
       </SafeAreaView>
     );
@@ -105,7 +82,7 @@ export default function FarmDashboard() {
 
           <Pressable
             className="flex flex-row items-center space-x-2 px-4 py-2.5 rounded-pill bg-primary active:opacity-90 shadow-sm"
-            onPress={() => router.push("/Screens/addNewNodeScreen")}
+            onPress={() => router.push("/Screens/modifyNodeScreen")}
           >
             <Ionicons name="add" size={18} color="#ffffff" />
             <Text className="text-sm font-semibold tracking-tight text-white">
@@ -115,7 +92,7 @@ export default function FarmDashboard() {
         </View>
 
         {/* Farm Nodes List */}
-        <View>
+        {/* <View>
           {isLoading ? (
             <View className="flex-1 justify-center items-center">
               <ActivityIndicator size="large" color="#0000ff" />
@@ -128,13 +105,22 @@ export default function FarmDashboard() {
               </View>
             ))
           )}
+        </View> */}
+
+        <View>
+          {farmNodes.map((node, idx) => (
+            <View key={idx}>
+              <FarmNode node={node} name={node.node_name} imageUrl="salad.jpg" />
+            </View>
+          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function FarmNode({ name, imageUrl }: { name: string; imageUrl: string }) {
+function FarmNode({ node, name, imageUrl }: { node: FarmNodeTypes, name: string; imageUrl: string }) {
+  const router = useRouter();
   const icons: any = [
     <MaterialCommunityIcons name="thermometer" size={20} color="#111827" />,
     <Ionicons name="water" size={20} color="#111827" />,
@@ -147,8 +133,8 @@ function FarmNode({ name, imageUrl }: { name: string; imageUrl: string }) {
     temperature: 67,
     humidity: 85,
     ph: 5.5,
-    tds: 660
-  }
+    tds: 660,
+  };
 
   return (
     <View className="px-6 mb-5">
@@ -162,7 +148,15 @@ function FarmNode({ name, imageUrl }: { name: string; imageUrl: string }) {
           <Text className="text-white text-2xl font-bold tracking-wide">
             {name}
           </Text>
-          <TouchableOpacity className="w-10 h-10 bg-surface/90 rounded-full items-center justify-center">
+          <TouchableOpacity
+            onPress={() =>
+              router.push({
+                pathname: "/Screens/nodeDetailScreen",
+                params: { node_id: node.node_id },
+              })
+            }
+            className="w-10 h-10 bg-surface/90 rounded-full items-center justify-center"
+          >
             <Feather name="arrow-up-right" size={20} color="#111827" />
           </TouchableOpacity>
         </View>

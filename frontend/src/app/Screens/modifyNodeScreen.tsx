@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,12 +9,13 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
 } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { Ionicons } from "@expo/vector-icons";
-import axios from "axios";
+import { Feather } from "@expo/vector-icons";
+import { useFarmNodeStore } from "@/store/farmNodeStore";
+import { addNewNode, updateNode } from "@/services/farmNodeServices";
+import ConfirmationModal from "../(modals)/showMessageModal";
 
 const INITIAL_SENSORS = [
   {
@@ -33,7 +34,7 @@ const INITIAL_SENSORS = [
   { id: "tds", label: "TDS", minKey: "min_tds", maxKey: "max_tds" },
 ] as const;
 
-interface FarmNodeTypes {
+interface FarmNodeUploadTypes {
   node_name: string;
   min_temperature: string;
   min_humidity: string;
@@ -45,25 +46,68 @@ interface FarmNodeTypes {
   max_tds: string;
 }
 
+interface FarmNodeTypes {
+  node_id: string;
+  node_name: string;
+  min_temperature: string;
+  min_humidity: string;
+  min_pH: string;
+  min_tds: string;
+  max_temperature: string;
+  max_humidity: string;
+  max_pH: string;
+  max_tds: string;
+}
+
+type NumericSensorKey = 
+  | "min_temperature" 
+  | "max_temperature"
+  | "min_humidity" 
+  | "max_humidity"
+  | "min_pH" 
+  | "max_pH"
+  | "min_tds" 
+  | "max_tds";
+
+const requiredKeys: NumericSensorKey[] = [
+  "min_temperature", "max_temperature",
+  "min_humidity", "max_humidity",
+  "min_pH", "max_pH",
+  "min_tds", "max_tds"
+];
+
 export default function FarmNodeForm() {
+  const params = useLocalSearchParams();
   const router = useRouter();
-  const [nodeName, setNodeName] = useState("");
-  const [nodeImage, setNodeImage] = useState(null);
+  const addNodeToStore = useFarmNodeStore((state) => state.addNode);
+  const updateNodeToStore = useFarmNodeStore((state) => state.updateNode);
+  const currentNode = useFarmNodeStore(
+    (state) => state.nodes.filter((node) => node.node_id == params.node_id)[0],
+  );
 
-  // Sensor threshold states
-  const [thresholds, setThresholds] = useState({
-    min_temperature: "",
-    min_humidity: "",
-    min_pH: "",
-    min_tds: "",
-    max_temperature: "",
-    max_humidity: "",
-    max_pH: "",
-    max_tds: "",
-  });
+  console.log(params.node_id);
 
-  const handleThresholdChange = (key: string, value: string) => {
-    setThresholds((prev) => ({ ...prev, [key]: value }));
+  const [nodeImage, setNodeImage] = useState(null); // we don't need this one too
+  const [isMessageModalVisible, setIsMessageModalVisible] = useState(false);
+  const [message, setMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [nodeData, setNodeData] = useState<FarmNodeTypes>(
+    currentNode || {
+      node_id: "",
+      node_name: "",
+      min_temperature: "",
+      min_humidity: "",
+      min_pH: "",
+      min_tds: "",
+      max_temperature: "",
+      max_humidity: "",
+      max_pH: "",
+      max_tds: "",
+    },
+  );
+
+  const handleThresholdChange = (key: keyof FarmNodeTypes, value: string) => {
+    setNodeData((prev) => (prev ? { ...prev, [key]: value } : prev));
   };
 
   const pickImage = async () => {
@@ -91,41 +135,99 @@ export default function FarmNodeForm() {
   };
 
   const handleSubmit = async () => {
-    if (!nodeName.trim()) {
-      Alert.alert("Error", "Please enter a node name.");
+    setIsSaving(true);
+    if (typeof nodeData.node_name !== "string" || !nodeData.node_name.trim()) {
+      setIsMessageModalVisible(true);
+      setMessage("Node name is required");
+      setIsSaving(false);
       return;
     }
 
-    const formData: FarmNodeTypes = {
-      node_name: nodeName,
-      ...thresholds,
-    };
+    // 2. Check if all keys exist
+    const hasAllKeys = requiredKeys.every((key) =>
+      Object.prototype.hasOwnProperty.call(nodeData, key),
+    );
+    if (!hasAllKeys) {
+      setIsMessageModalVisible(true);
+      setMessage("Fill all the forms please!");
+      setIsSaving(false);
+      return;
+    }
 
-    console.log(formData);
+    // 3. Convert strings to numbers and validate
+    const parsedData: Record<string, any> = { ...nodeData };
 
-    const status = await addNewNodeFunction(formData);
+    for (const key of requiredKeys) {
+      const val = nodeData[key];
 
-    if (status == 200) {
-      router.back();
+      if (val === "" || val === null || val === undefined) {
+        setIsMessageModalVisible(true);
+        setIsSaving(false);
+        return;
+      }
+
+      const numericVal = Number(val);
+
+      if (isNaN(numericVal)) {
+        setIsMessageModalVisible(true);
+        setMessage("Put nemeric values for sensor threshold please!");
+        setIsSaving(false);
+        return;
+      }
+
+      parsedData[key] = numericVal;
+    }
+
+    // 4. Check if data values are physically reasonable/realistic
+    const isReasonable =
+      parsedData.min_temperature >= -50 &&
+      parsedData.max_temperature <= 100 && // Temperature: -50°C to 100°C
+      parsedData.min_humidity >= 0 &&
+      parsedData.max_humidity <= 100 && // Humidity: 0% to 100%
+      parsedData.min_pH >= 0 &&
+      parsedData.max_pH <= 14 && // pH scale: 0 to 14
+      parsedData.min_tds >= 0 &&
+      parsedData.max_tds >= 0; // TDS: Cannot be negative
+
+    if (!isReasonable) {
+      setIsMessageModalVisible(true);
+      setMessage("Put reasonable values for sensor thresholds please!");
+      setIsSaving(false);
+      return;
+    }
+
+    // 5. Check logical bounds (min must not exceed max)
+    if (
+      parsedData["min_temperature"] > parsedData["max_temperature"] ||
+      parsedData["min_humidity"] > parsedData["max_humidity"] ||
+      parsedData["min_pH"] > parsedData["max_pH"] ||
+      parsedData["min_tds"] > parsedData["max_tds"]
+    ) {
+      setIsMessageModalVisible(true);
+      setMessage("Minimum threshold should't exceed maximum threshold!");
+      setIsSaving(false);
+      return;
+    }
+
+    if (params.node_id) {
+      const status = await updateNode(nodeData);
+      setIsSaving(false);
+
+      if (status == 200) {
+        updateNodeToStore(nodeData);
+        router.back();
+      }
+    } else {
+      const { node_id, ...rest } = nodeData;
+      const res = await addNewNode(rest);
+      setIsSaving(false);
+
+      if (res?.status == 200) {
+        addNodeToStore({ ...nodeData, node_id: res.node_id });
+        router.back();
+      }
     }
   };
-
-  async function addNewNodeFunction(formData: FarmNodeTypes) {
-    try {
-      const res = await axios.post(
-        `${process.env.EXPO_PUBLIC_SERVER}:3000/api/node/addNewNode`,
-        formData,
-      );
-
-      console.log("Response data: ", res.data);
-      console.log("Response status: ", res.status);
-
-      return res.status;
-    } catch (error: any) {
-      console.log(error.message);
-      return;
-    }
-  }
 
   return (
     <>
@@ -147,15 +249,13 @@ export default function FarmNodeForm() {
           automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         >
           <View className="mt-6 mb-2 flex flex-row items-center justify-between">
-            <Text className="text-2xl font-bold text-main">
-              Add New Farm Node
-            </Text>
+            <Text className="text-2xl font-bold text-main">Add New Node</Text>
 
             <TouchableOpacity
               onPress={() => router.back()}
-              className="bg-surface w-12 h-12 rounded-full flex items-center justify-center"
+              className="w-11 h-11 bg-surface rounded-full items-center justify-center shadow-sm"
             >
-              <Ionicons name="arrow-back" size={24} color="#2D3748" />
+              <Feather name="arrow-left" size={20} color="#111827" />
             </TouchableOpacity>
           </View>
 
@@ -172,9 +272,11 @@ export default function FarmNodeForm() {
               </Text>
               <TextInput
                 className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-muted focus:border-emerald-600"
-                placeholder="e.g., North Sector - Greenhouse 1"
-                value={nodeName}
-                onChangeText={setNodeName}
+                placeholder="e.g., Greenhouse 1"
+                value={nodeData.node_name ? String(nodeData.node_name) : ""}
+                onChangeText={(name) =>
+                  setNodeData({ ...nodeData, node_name: name })
+                }
               />
             </View>
 
@@ -213,10 +315,10 @@ export default function FarmNodeForm() {
             </View>
           </View>
 
-          {/* Sensor Thresholds Section */}
+          {/* Sensor nodeData Section */}
           <View className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-6">
             <Text className="text-lg font-semibold text-main mb-1">
-              Sensor Thresholds
+              Sensor nodeData
             </Text>
             <Text className="text-xs text-muted mb-4">
               Set min/max bounds for alerts
@@ -239,7 +341,11 @@ export default function FarmNodeForm() {
                       className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:border-emerald-600"
                       placeholder="Min"
                       keyboardType="numeric"
-                      value={thresholds[sensor.minKey]}
+                      value={
+                        nodeData?.[sensor.minKey]
+                          ? String(nodeData?.[sensor.minKey])
+                          : ""
+                      }
                       onChangeText={(val) =>
                         handleThresholdChange(sensor.minKey, val)
                       }
@@ -253,7 +359,11 @@ export default function FarmNodeForm() {
                       className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:border-emerald-600"
                       placeholder="Max"
                       keyboardType="numeric"
-                      value={thresholds[sensor.maxKey]}
+                      value={
+                        nodeData?.[sensor.maxKey]
+                          ? String(nodeData?.[sensor.maxKey])
+                          : ""
+                      }
                       onChangeText={(val) =>
                         handleThresholdChange(sensor.maxKey, val)
                       }
@@ -269,8 +379,14 @@ export default function FarmNodeForm() {
             onPress={handleSubmit}
             className="bg-accent py-3.5 rounded-xl items-center mb-16 shadow-md active:bg-emerald-700"
           >
-            <Text className="text-main font-bold text-lg">Save Farm Node</Text>
+            <Text className="text-main font-bold text-lg">{isSaving ? "Saving..." : "Save Farm Node"}</Text>
           </TouchableOpacity>
+
+          <ConfirmationModal
+            visible={isMessageModalVisible}
+            onConfirm={() => setIsMessageModalVisible(false)}
+            message={message}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </>
