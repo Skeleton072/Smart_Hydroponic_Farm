@@ -17,19 +17,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
-
-interface FarmNodeTypes {
-  node_id: string;
-  node_name: string;
-  min_temperature: string;
-  min_humidity: string;
-  min_pH: string;
-  min_tds: string;
-  max_temperature: string;
-  max_humidity: string;
-  max_pH: string;
-  max_tds: string;
-}
+import { FarmNodeTypes } from '../(types)/NodeDataType'
 
 const imageMap: Record<string, any> = {
   "salad.jpg": require("@/assets/images/salad.jpg"),

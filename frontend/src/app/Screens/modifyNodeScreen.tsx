@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
 import { addNewNode, updateNode } from "@/services/farmNodeServices";
 import ConfirmationModal from "../(modals)/showMessageModal";
+import { FarmNodeTypes, NumericSensorKey } from "../(types)/NodeDataType";
 
 const INITIAL_SENSORS = [
   {
@@ -23,51 +24,34 @@ const INITIAL_SENSORS = [
     label: "Temperature (°C)",
     minKey: "min_temperature",
     maxKey: "max_temperature",
+    minDefault: "25",
+    maxDefault: "30"
   },
   {
     id: "humidity",
     label: "Humidity (%)",
     minKey: "min_humidity",
     maxKey: "max_humidity",
+    minDefault: "55",
+    maxDefault: "75"
   },
-  { id: "ph", label: "pH (%)", minKey: "min_pH", maxKey: "max_pH" },
-  { id: "tds", label: "TDS", minKey: "min_tds", maxKey: "max_tds" },
+  { 
+    id: "ph", 
+    label: "pH (%)", 
+    minKey: "min_pH", 
+    maxKey: "max_pH" ,
+    minDefault: "5.5",
+    maxDefault: "6.5"
+  },
+  { 
+    id: "tds", 
+    label: "TDS",
+    minKey: "min_tds", 
+    maxKey: "max_tds",
+    minDefault: "600",
+    maxDefault: "800"
+  },
 ] as const;
-
-interface FarmNodeUploadTypes {
-  node_name: string;
-  min_temperature: string;
-  min_humidity: string;
-  min_pH: string;
-  min_tds: string;
-  max_temperature: string;
-  max_humidity: string;
-  max_pH: string;
-  max_tds: string;
-}
-
-interface FarmNodeTypes {
-  node_id: string;
-  node_name: string;
-  min_temperature: string;
-  min_humidity: string;
-  min_pH: string;
-  min_tds: string;
-  max_temperature: string;
-  max_humidity: string;
-  max_pH: string;
-  max_tds: string;
-}
-
-type NumericSensorKey = 
-  | "min_temperature" 
-  | "max_temperature"
-  | "min_humidity" 
-  | "max_humidity"
-  | "min_pH" 
-  | "max_pH"
-  | "min_tds" 
-  | "max_tds";
 
 const requiredKeys: NumericSensorKey[] = [
   "min_temperature", "max_temperature",
@@ -75,6 +59,8 @@ const requiredKeys: NumericSensorKey[] = [
   "min_pH", "max_pH",
   "min_tds", "max_tds"
 ];
+
+const defaultValues = ["25", "30", "55", "75", "5.5", "6.5", "500", "750"];
 
 export default function FarmNodeForm() {
   const params = useLocalSearchParams();
@@ -84,8 +70,6 @@ export default function FarmNodeForm() {
   const currentNode = useFarmNodeStore(
     (state) => state.nodes.filter((node) => node.node_id == params.node_id)[0],
   );
-
-  console.log(params.node_id);
 
   const [nodeImage, setNodeImage] = useState(null); // we don't need this one too
   const [isMessageModalVisible, setIsMessageModalVisible] = useState(false);
@@ -142,28 +126,14 @@ export default function FarmNodeForm() {
       setIsSaving(false);
       return;
     }
-
-    // 2. Check if all keys exist
-    const hasAllKeys = requiredKeys.every((key) =>
-      Object.prototype.hasOwnProperty.call(nodeData, key),
-    );
-    if (!hasAllKeys) {
-      setIsMessageModalVisible(true);
-      setMessage("Fill all the forms please!");
-      setIsSaving(false);
-      return;
-    }
-
-    // 3. Convert strings to numbers and validate
+    
     const parsedData: Record<string, any> = { ...nodeData };
 
-    for (const key of requiredKeys) {
-      const val = nodeData[key];
+    requiredKeys.map((key, idx) => {
+      let val = nodeData[key];
 
       if (val === "" || val === null || val === undefined) {
-        setIsMessageModalVisible(true);
-        setIsSaving(false);
-        return;
+        val = defaultValues[idx];
       }
 
       const numericVal = Number(val);
@@ -176,7 +146,7 @@ export default function FarmNodeForm() {
       }
 
       parsedData[key] = numericVal;
-    }
+    });
 
     // 4. Check if data values are physically reasonable/realistic
     const isReasonable =
@@ -339,7 +309,7 @@ export default function FarmNodeForm() {
                     </Text>
                     <TextInput
                       className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:border-emerald-600"
-                      placeholder="Min"
+                      placeholder={sensor.minDefault}
                       keyboardType="numeric"
                       value={
                         nodeData?.[sensor.minKey]
@@ -357,7 +327,7 @@ export default function FarmNodeForm() {
                     </Text>
                     <TextInput
                       className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:border-emerald-600"
-                      placeholder="Max"
+                      placeholder={sensor.maxDefault}
                       keyboardType="numeric"
                       value={
                         nodeData?.[sensor.maxKey]

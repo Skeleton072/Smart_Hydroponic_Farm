@@ -16,25 +16,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
 import DeleteConfirmationModal from "../(modals)/deleteConfirmationModal";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { deleteNode } from "@/services/farmNodeServices";
+import { FarmNodeTypes } from "../(types)/NodeDataType";
 
 const imageMap: Record<string, any> = {
   "salad.jpg": require("@/assets/images/salad.jpg"),
 };
 
-interface FarmNodeTypes {
-  node_id: string;
-  node_name: string;
-  min_temperature: string;
-  min_humidity: string;
-  min_pH: string;
-  min_tds: string;
-  max_temperature: string;
-  max_humidity: string;
-  max_pH: string;
-  max_tds: string;
-}
 
 const SENSOR_ICONS = [
   { lib: MaterialCommunityIcons, name: "thermometer" },
@@ -53,15 +42,10 @@ export default function NodeDetailScreen() {
 
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  // const [node, setNode] = useState<FarmNodeTypes | null>();
-
-  console.log(node);
 
   async function handleDeleteNode() {
     try {
       setIsDeleting(true);
-      console.log(node);
-      console.log(node?.node_id);
       const status = await deleteNode(node!.node_id);
 
       if (status != 200) {
@@ -85,10 +69,6 @@ export default function NodeDetailScreen() {
     { label: "pH Level", value: "5.5", unit: "pH", status: "Optimal" },
     { label: "TDS", value: "660", unit: "ppm", status: "Normal" },
   ];
-
-  // useEffect(() => {
-  //   setNode(currNode);
-  // }, [])
 
   return (
     <>
