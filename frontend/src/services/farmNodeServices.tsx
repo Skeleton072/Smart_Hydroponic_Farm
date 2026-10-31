@@ -1,31 +1,20 @@
 import axios from "axios";
-
-interface FarmNodeTypes {
-  node_name: string;
-  min_temperature: string;
-  min_humidity: string;
-  min_pH: string;
-  min_tds: string;
-  max_temperature: string;
-  max_humidity: string;
-  max_pH: string;
-  max_tds: string;
-}
+import { FarmNodeTypes, FarmNodeUploadTypes } from "@/app/(types)/NodeDataType";
 
 export async function getAllFarmNodes() {
   try {
-    const response = await axios.get(
+    const res = await axios.get(
       `${process.env.EXPO_PUBLIC_SERVER}/api/node/getAllNodes`,
     );
 
-    return response.data.data;
+    return res.data.data;
   } catch (error: any) {
     console.log("Error: ", error.message);
     return;
   }
 }
 
-export async function addNewNode(formData: FarmNodeTypes) {
+export async function addNewNode(formData: FarmNodeUploadTypes) {
   try {
     const res = await axios.post(
       `${process.env.EXPO_PUBLIC_SERVER}/api/node/addNewNode`,

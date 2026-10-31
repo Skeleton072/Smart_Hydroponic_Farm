@@ -16,7 +16,7 @@ import { Feather } from "@expo/vector-icons";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
 import { addNewNode, updateNode } from "@/services/farmNodeServices";
 import ConfirmationModal from "../(modals)/showMessageModal";
-import { FarmNodeTypes, NumericSensorKey } from "../(types)/NodeDataType";
+import { FarmNodeTypes, NumericSensorKey , FarmNodeUploadTypes} from "../(types)/NodeDataType";
 
 const INITIAL_SENSORS = [
   {

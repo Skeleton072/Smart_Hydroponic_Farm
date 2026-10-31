@@ -10,6 +10,8 @@ const express = require("express");
 const cors = require("cors");
 const nodeRouter = require("./routes/nodeRoute");
 const mqttClient = require("./config/mqtt");
+const WebSocket = require("ws");
+// const { startMonitoringMany, stopMonitoringMany } = require("../services/monitoringService");
 const app = express();
 
 app.use(cors());
@@ -21,11 +23,74 @@ app.get("/", (req, res) => {
 });
 app.use("/api/node", nodeRouter);
 
+// web socket
+const wss = new WebSocket.Server({ port: 8080 });
 
+wss.on("connection", (socket) => {
+  console.log("WebSocket has started...");
+  const subscribedNodes = new Set();
+
+  socket.on("message", async (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+
+      if (data.action === "subscribe_nodes") {
+        const nodeIds = data.nodeIds;
+
+        // Validate that the user owns these nodes first.
+
+        const newNodes = nodeIds.filter(
+          id => !subscribedNodes.has(id)
+        );
+
+        newNodes.forEach(id => subscribedNodes.add(id));
+
+        // startMonitoringMany(newNodes, socket);
+
+        socket.send(JSON.stringify({
+          status: "success",
+          action: "sensor_readings",
+          message: `Successfully subscribed to nodes: ${newNodes.join(", ")}`,
+          sensorReadings: {
+            [nodeIds[0]]: {
+              "water_temperature": "25",
+              "humidity": "75",
+              "pH": "6.5",
+              "tds": "700",
+              "timestamp": "10-31-2026"
+            }
+          }
+        }));
+      }
+
+      if (data.action === "unsubscribe_nodes") {
+        const nodeIds = data.nodeIds;
+
+        const existingNodes = nodeIds.filter(
+          id => subscribedNodes.has(id)
+        );
+
+        existingNodes.forEach(id => subscribedNodes.delete(id));
+
+        // stopMonitoringMany(existingNodes, socket);
+      }
+
+    } catch (error) {
+      console.error("WebSocket message error:", error);
+    }
+  });
+
+  socket.on("close", () => {
+    // stopMonitoringMany([...subscribedNodes], socket);
+    subscribedNodes.clear();
+  });
+});
+
+
+// mqtt client
 mqttClient.on("connect", () => {
   console.log("Connected to MQTT broker successfully!");
 
-  // 2. Subscribe to the exact topic your ESP32 is publishing to
   mqttClient.subscribe("hydroponics/sensors", (err) => {
     if (!err) {
       console.log("Subscribed to topic: hydroponics/sensors");
@@ -35,21 +100,18 @@ mqttClient.on("connect", () => {
   });
 });
 
-// 3. Listen for incoming messages from the ESP32
+
 mqttClient.on("message", (topic, payload) => {
-  // topic is string, payload is a Buffer
   console.log(`\nReceived message on [${topic}]:`);
 
   try {
-    // Parse the JSON string sent by the ESP32
     const data = JSON.parse(payload.toString());
 
     console.log("Parsed Sensor Data:");
-    console.log(`- pH: ${data.ph}`);
-    console.log(`- EC: ${data.ec}`);
-    console.log(`- Water Temp: ${data.water_temp}°C`);
-
-    // TODO: Insert your logic here (e.g., save to Supabase, check thresholds, trigger alarms)
+    console.log(`- Water Temperature : ${data.water_temperature}°C`);
+    console.log(`- Humidity : ${data.humidity}%`);
+    console.log(`- pH : ${data.pH}`);
+    console.log(`- TDS : ${data.tds}ppm`);
   } catch (error) {
     console.error(
       "Failed to parse incoming payload as JSON:",
@@ -61,7 +123,6 @@ mqttClient.on("message", (topic, payload) => {
 mqttClient.on("error", (err) => {
   console.error("Connection error:", err);
 });
-
 
 app.listen(3000, () => {
   console.log("Server is listening at port 3000");

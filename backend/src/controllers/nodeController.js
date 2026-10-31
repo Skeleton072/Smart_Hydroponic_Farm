@@ -57,7 +57,6 @@ async function getAllNodes(req, res) {
     if (error) return res.status(400).json({ message: error.message });
 
     console.log("Successfully selected all nodes");
-    // return data;
 
     return res.status(200).json({ data });
   } catch (error) {

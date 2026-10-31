@@ -3,16 +3,16 @@ import { Stack, ThemeProvider, DefaultTheme } from "expo-router";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
 import { useEffect } from "react";
 import { getAllFarmNodes } from "@/services/farmNodeServices";
+import { useWebSocket } from "@/hooks/useWebSocket"; // Your custom hook
 
 export default function RootLayout() {
   const setNodes = useFarmNodeStore((state) => state.setNodes);
   const setLoading = useFarmNodeStore((state) => state.setLoading);
-  const initialized = useFarmNodeStore(
-    (state) => state.initialized
-  );
-  const setInitialized = useFarmNodeStore(
-    (state) => state.setInitialized
-  );
+  const initialized = useFarmNodeStore((state) => state.initialized);
+  const setInitialized = useFarmNodeStore((state) => state.setInitialized);
+  const nodes = useFarmNodeStore((state) => state.nodes);
+
+  const { sendMessage } = useWebSocket(`${process.env.EXPO_PUBLIC_WEBSOCKET_SERVER}`);
 
   useEffect(() => {
     if (initialized) return;
@@ -23,16 +23,16 @@ export default function RootLayout() {
       setLoading(true);
 
       try {
-        const nodes = await getAllFarmNodes();
+        const fetchedNodes = await getAllFarmNodes();
         if (active) {
-          setNodes(nodes);
+          setNodes(fetchedNodes);
+          setInitialized(true);
         }
       } catch (error) {
         console.error("Failed to load farm nodes:", error);
       } finally {
         if (active) {
           setLoading(false);
-          setInitialized(true);
         }
       }
     }
@@ -44,11 +44,23 @@ export default function RootLayout() {
     };
   }, [initialized]);
 
+  useEffect(() => {
+    if (initialized && nodes.length > 0) {
+      const nodeIds = nodes.map((node) => node.node_id);
+      console.log("_layout.tsx", nodeIds);
+
+      sendMessage({
+        action: "subscribe_nodes",
+        nodeIds: nodeIds,
+      });
+    }
+  }, [initialized, nodes]);
+
   return (
     <ThemeProvider value={DefaultTheme}>
       <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }}/>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>
-  )
+  );
 }

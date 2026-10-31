@@ -24,7 +24,6 @@ const imageMap: Record<string, any> = {
   "salad.jpg": require("@/assets/images/salad.jpg"),
 };
 
-
 const SENSOR_ICONS = [
   { lib: MaterialCommunityIcons, name: "thermometer" },
   { lib: Ionicons, name: "water" },
@@ -184,7 +183,7 @@ export default function NodeDetailScreen() {
               <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
                 <Text className="text-sm text-muted">Temperature Range</Text>
                 <Text className="text-sm font-semibold text-main">
-                  {node?.min_temperature}°F – {node?.max_temperature}°F
+                  {node?.min_temperature}°C – {node?.max_temperature}°C
                 </Text>
               </View>
               <View className="flex-row justify-between items-center py-2 border-b border-gray-100">

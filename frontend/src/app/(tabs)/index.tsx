@@ -18,6 +18,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
 import { FarmNodeTypes } from '../(types)/NodeDataType'
+import { useSensorStore } from "@/store/sensorStore";
+import { SensorReadingsType } from "../(types)/SensorDataType";
 
 const imageMap: Record<string, any> = {
   "salad.jpg": require("@/assets/images/salad.jpg"),
@@ -28,6 +30,7 @@ export default function FarmDashboard() {
 
   const farmNodes = useFarmNodeStore((state) => state.nodes);
   const isLoading = useFarmNodeStore((state) => state.loading);
+  const sensorReadings = useSensorStore((state) => state.sensorReadings);
 
   if (isLoading) {
     return (
@@ -98,7 +101,7 @@ export default function FarmDashboard() {
         <View>
           {farmNodes.map((node, idx) => (
             <View key={idx}>
-              <FarmNode node={node} name={node.node_name} imageUrl="salad.jpg" />
+              <FarmNode node={node} name={node.node_name} imageUrl="salad.jpg" sensorReadings={sensorReadings[node.node_id]}/>
             </View>
           ))}
         </View>
@@ -107,7 +110,7 @@ export default function FarmDashboard() {
   );
 }
 
-function FarmNode({ node, name, imageUrl }: { node: FarmNodeTypes, name: string; imageUrl: string }) {
+function FarmNode({ node, name, imageUrl, sensorReadings }: { node: FarmNodeTypes, name: string; imageUrl: string, sensorReadings: SensorReadingsType }) {
   const router = useRouter();
   const icons: any = [
     <MaterialCommunityIcons name="thermometer" size={20} color="#111827" />,
@@ -115,14 +118,11 @@ function FarmNode({ node, name, imageUrl }: { node: FarmNodeTypes, name: string;
     <MaterialCommunityIcons name="sprout" size={20} color="#111827" />,
     <FontAwesome5 name="water" size={20} color="#111827" />,
   ];
-  const units = ["°F", "%", "pH", " ppm"];
+  const units = ["°C", "%", "pH", " ppm"];
 
-  const sensorValues = {
-    temperature: 67,
-    humidity: 85,
-    ph: 5.5,
-    tds: 660,
-  };
+  const { timestamp, ...sensorReading } = sensorReadings;
+
+  console.log(sensorReading);
 
   return (
     <View className="px-6 mb-5">
@@ -150,18 +150,20 @@ function FarmNode({ node, name, imageUrl }: { node: FarmNodeTypes, name: string;
         </View>
 
         <View className="w-full flex-row justify-between space-x-3 bg-black/40 backdrop-blur-md px-4 py-3">
-          {Object.entries(sensorValues).map(([sensor, value], idx) => (
-            <View key={`${sensor}-${idx}`} className="flex-1 items-center">
-              <View className="w-10 h-10 rounded-full bg-accent items-center justify-center mb-1">
-                {icons[idx]}
+          {
+            Object.entries(sensorReading).map(([sensor, value], idx) => (
+                <View key={`${sensor}-${idx}`} className="flex-1 items-center">
+                <View className="w-10 h-10 rounded-full bg-accent items-center justify-center mb-1">
+                  {icons[idx]}
+                </View>
+                <Text className="text-white font-bold text-base">
+                  {String(value)} {units[idx]}
+                </Text>
+                <Text className="text-gray-300 text-xs">{sensor}</Text>
               </View>
-              <Text className="text-white font-bold text-base">
-                67
-                {units[idx]}
-              </Text>
-              <Text className="text-gray-300 text-xs">{sensor}</Text>
-            </View>
-          ))}
+              )
+            )
+          }
         </View>
       </View>
     </View>

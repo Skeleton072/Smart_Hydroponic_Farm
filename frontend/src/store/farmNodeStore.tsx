@@ -1,26 +1,14 @@
 import { create } from "zustand";
-
-export type FarmNode = {
-  node_id: string;
-  node_name: string;
-  min_temperature: string;
-  min_humidity: string;
-  min_pH: string;
-  min_tds: string;
-  max_temperature: string;
-  max_humidity: string;
-  max_pH: string;
-  max_tds: string;
-};
+import { FarmNodeTypes } from "@/app/(types)/NodeDataType";
 
 type FarmNodeStore = {
-  nodes: FarmNode[];
+  nodes: FarmNodeTypes[];
   initialized: boolean;
   loading: boolean;
 
-  setNodes: (nodes: FarmNode[]) => void;
-  addNode: (node: FarmNode) => void;
-  updateNode: (node: FarmNode) => void;
+  setNodes: (nodes: FarmNodeTypes[]) => void;
+  addNode: (node: FarmNodeTypes) => void;
+  updateNode: (node: FarmNodeTypes) => void;
   removeNode: (id: string) => void;
   setLoading: (loading: boolean) => void;
   setInitialized: (initialized: boolean) => void;
