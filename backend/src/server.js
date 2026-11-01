@@ -8,7 +8,8 @@ dotenv.config({
 
 const express = require("express");
 const cors = require("cors");
-const nodeRouter = require("./routes/nodeRoute");
+const nodeRouter = require("./routes/node.route");
+const authRouter = require("./routes/auth.route");
 const mqttClient = require("./config/mqtt");
 const WebSocket = require("ws");
 // const { startMonitoringMany, stopMonitoringMany } = require("../services/monitoringService");
@@ -16,12 +17,8 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.get("/", (req, res) => {
-  console.log("Hello World");
-
-  return res.status(200).json({ message: "Hello World" });
-});
 app.use("/api/node", nodeRouter);
+app.use("/api/auth", authRouter);
 
 // web socket
 const wss = new WebSocket.Server({ port: 8080 });
@@ -86,43 +83,41 @@ wss.on("connection", (socket) => {
   });
 });
 
-
 // mqtt client
-mqttClient.on("connect", () => {
-  console.log("Connected to MQTT broker successfully!");
+// mqttClient.on("connect", () => {
+//   console.log("Connected to MQTT broker successfully!");
 
-  mqttClient.subscribe("hydroponics/sensors", (err) => {
-    if (!err) {
-      console.log("Subscribed to topic: hydroponics/sensors");
-    } else {
-      console.error("Subscription error:", err);
-    }
-  });
-});
+//   mqttClient.subscribe("hydroponics/sensors", (err) => {
+//     if (!err) {
+//       console.log("Subscribed to topic: hydroponics/sensors");
+//     } else {
+//       console.error("Subscription error:", err);
+//     }
+//   });
+// });
 
+// mqttClient.on("message", (topic, payload) => {
+//   console.log(`\nReceived message on [${topic}]:`);
 
-mqttClient.on("message", (topic, payload) => {
-  console.log(`\nReceived message on [${topic}]:`);
+//   try {
+//     const data = JSON.parse(payload.toString());
 
-  try {
-    const data = JSON.parse(payload.toString());
+//     console.log("Parsed Sensor Data:");
+//     console.log(`- Water Temperature : ${data.water_temperature}°C`);
+//     console.log(`- Humidity : ${data.humidity}%`);
+//     console.log(`- pH : ${data.pH}`);
+//     console.log(`- TDS : ${data.tds}ppm`);
+//   } catch (error) {
+//     console.error(
+//       "Failed to parse incoming payload as JSON:",
+//       payload.toString(),
+//     );
+//   }
+// });
 
-    console.log("Parsed Sensor Data:");
-    console.log(`- Water Temperature : ${data.water_temperature}°C`);
-    console.log(`- Humidity : ${data.humidity}%`);
-    console.log(`- pH : ${data.pH}`);
-    console.log(`- TDS : ${data.tds}ppm`);
-  } catch (error) {
-    console.error(
-      "Failed to parse incoming payload as JSON:",
-      payload.toString(),
-    );
-  }
-});
-
-mqttClient.on("error", (err) => {
-  console.error("Connection error:", err);
-});
+// mqttClient.on("error", (err) => {
+//   console.error("Connection error:", err);
+// });
 
 app.listen(3000, () => {
   console.log("Server is listening at port 3000");
