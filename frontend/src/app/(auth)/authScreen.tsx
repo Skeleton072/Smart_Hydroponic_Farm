@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/store/authStore";
@@ -29,18 +30,21 @@ function validatePassword(password: string) {
 
 export default function AuthScreen() {
   const [isLogin, setIsLogin] = useState<boolean>(true);
+  const [isLogging, setIsLogging] = useState(false);
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [name, setName] = useState<string>("");
   const [showPassword, setShowPassword] = useState(true);
   const router = useRouter();
 
+  const insets = useSafeAreaInsets();
+
   const signin = useAuthStore((state) => state.signIn);
 
   async function handleSubmit() {
+    setIsLogging(true);
     if (!validateEmail(email)) {
       console.log("Enter valid credentials!");
-      // warning modal
 
       return;
     }
@@ -93,6 +97,8 @@ export default function AuthScreen() {
     } catch (error: any) {
       console.log("Error: ", error.message);
       return;
+    } finally {
+      setIsLogging(false);
     }
   }
 
@@ -100,123 +106,135 @@ export default function AuthScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView
-        // behavior={Platform.OS === "ios" ? "padding" : "height"}
-        contentContainerStyle={{
-          justifyContent: "center",
-        }}
-        className="flex-1 bg-background px-6 "
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: "#f9fafb" }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
       >
-        <View className="bg-surface p-8 rounded-3xl shadow-lg border border-gray-200">
-          {/* Header Header */}
-          <View className="items-center mb-8">
-            <Text className="text-3xl font-bold text-main">
-              {isLogin ? "Welcome Back" : "Create Account"}
-            </Text>
-            <Text className="text-muted text-sm mt-1">
-              {isLogin
-                ? "Sign in to access your account"
-                : "Sign up to get started"}
-            </Text>
-          </View>
-
-          {/* Tab Toggle */}
-          <View className="flex-row bg-background p-1 rounded-pill mb-6">
-            <TouchableOpacity
-              className={`flex-1 py-3 rounded-pill items-center ${isLogin ? "bg-primary" : "bg-transparent"}`}
-              onPress={() => setIsLogin(true)}
-            >
-              <Text
-                className={`font-semibold ${isLogin ? "text-surface" : "text-muted"}`}
-              >
-                Login
+        <ScrollView
+           contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: 24,
+            paddingTop: insets.top + 24,
+            paddingBottom: insets.bottom + 24,
+          }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="bg-surface p-8 rounded-3xl shadow-lg border border-gray-200">
+            {/* Header Header */}
+            <View className="items-center mb-8">
+              <Text className="text-3xl font-bold text-main">
+                {isLogin ? "Welcome Back" : "Create Account"}
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className={`flex-1 py-3 rounded-pill items-center ${!isLogin ? "bg-primary" : "bg-transparent"}`}
-              onPress={() => setIsLogin(false)}
-            >
-              <Text
-                className={`font-semibold ${!isLogin ? "text-surface" : "text-muted"}`}
-              >
-                Sign Up
+              <Text className="text-muted text-sm mt-1">
+                {isLogin
+                  ? "Sign in to access your account"
+                  : "Sign up to get started"}
               </Text>
-            </TouchableOpacity>
-          </View>
+            </View>
 
-          {/* Form Fields */}
-          {!isLogin && (
+            {/* Tab Toggle */}
+            <View className="flex-row bg-background p-1 rounded-pill mb-6">
+              <TouchableOpacity
+                className={`flex-1 py-3 rounded-pill items-center ${isLogin ? "bg-primary" : "bg-transparent"}`}
+                onPress={() => setIsLogin(true)}
+              >
+                <Text
+                  className={`font-semibold ${isLogin ? "text-surface" : "text-muted"}`}
+                >
+                  Login
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`flex-1 py-3 rounded-pill items-center ${!isLogin ? "bg-primary" : "bg-transparent"}`}
+                onPress={() => setIsLogin(false)}
+              >
+                <Text
+                  className={`font-semibold ${!isLogin ? "text-surface" : "text-muted"}`}
+                >
+                  Sign Up
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Form Fields */}
+            {!isLogin && (
+              <View className="mb-4">
+                <Text className="text-xs font-medium text-muted mb-1 uppercase tracking-wider">
+                  Full Name
+                </Text>
+                <TextInput
+                  className="bg-background border border-gray-300 text-main px-4 py-3.5 rounded-xl text-base"
+                  placeholder="John Doe"
+                  placeholderTextColor="#9ca3af"
+                  value={name}
+                  onChangeText={setName}
+                />
+              </View>
+            )}
+
             <View className="mb-4">
               <Text className="text-xs font-medium text-muted mb-1 uppercase tracking-wider">
-                Full Name
+                Email Address
               </Text>
               <TextInput
                 className="bg-background border border-gray-300 text-main px-4 py-3.5 rounded-xl text-base"
-                placeholder="John Doe"
+                placeholder="name@example.com"
                 placeholderTextColor="#9ca3af"
-                value={name}
-                onChangeText={setName}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
               />
             </View>
-          )}
 
-          <View className="mb-4">
-            <Text className="text-xs font-medium text-muted mb-1 uppercase tracking-wider">
-              Email Address
-            </Text>
-            <TextInput
-              className="bg-background border border-gray-300 text-main px-4 py-3.5 rounded-xl text-base"
-              placeholder="name@example.com"
-              placeholderTextColor="#9ca3af"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-          </View>
-
-          <View className="mb-6">
-            <Text className="text-xs font-medium text-muted mb-1 uppercase tracking-wider">
-              Password
-            </Text>
-            <View className="flex-row items-center bg-background border border-gray-300 rounded-xl px-4">
-              <TextInput
-                className="flex-1 py-3.5 text-main text-base"
-                placeholder="••••••••"
-                placeholderTextColor="#9ca3af"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-              />
-
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                activeOpacity={0.7}
-                className="ml-2"
-              >
-                <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={20}
-                  color="#4b5563"
+            <View className="mb-6">
+              <Text className="text-xs font-medium text-muted mb-1 uppercase tracking-wider">
+                Password
+              </Text>
+              <View className="flex-row items-center bg-background border border-gray-300 rounded-xl px-4">
+                <TextInput
+                  className="flex-1 py-3.5 text-main text-base"
+                  placeholder="••••••••"
+                  placeholderTextColor="#9ca3af"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
                 />
-              </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  activeOpacity={0.7}
+                  className="ml-2"
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#4b5563"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {/* Action Button */}
+            <TouchableOpacity
+              className="bg-primary py-4 rounded-pill items-center shadow-md active:bg-primary-hover mb-4"
+              onPress={handleSubmit}
+            >
+              <Text className="text-surface font-bold text-base">
+                {isLogging ? "Please wait for a moment..." : (isLogin ? "Login" : "Sign Up")}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Accent indicator bar */}
+            <View className="h-1.5 w-12 bg-accent rounded-pill self-center mt-2" />
           </View>
-
-          {/* Action Button */}
-          <TouchableOpacity
-            className="bg-primary py-4 rounded-pill items-center shadow-md active:bg-primary-hover mb-4"
-            onPress={handleSubmit}
-          >
-            <Text className="text-surface font-bold text-base">
-              {isLogin ? "Login" : "Sign Up"}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Accent indicator bar */}
-          <View className="h-1.5 w-12 bg-accent rounded-pill self-center mt-2" />
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </>
   );
 }

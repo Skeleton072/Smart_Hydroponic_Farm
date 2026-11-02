@@ -203,15 +203,14 @@ export default function FarmNodeForm() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
-        className="flex-1 bg-gray-50"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: "#f9fafb" }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={0}
       >
         <ScrollView
           className="flex-1 px-4 bg-background"
           contentContainerStyle={{
             paddingTop: 24,
-            paddingBottom: 140,
             flexGrow: 1,
           }}
           keyboardShouldPersistTaps="handled"
@@ -308,8 +307,9 @@ export default function FarmNodeForm() {
                       Min Threshold
                     </Text>
                     <TextInput
-                      className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:border-emerald-600"
+                      className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-main focus:border-emerald-600 pl"
                       placeholder={sensor.minDefault}
+                      placeholderTextColor="grey"
                       keyboardType="numeric"
                       value={
                         nodeData?.[sensor.minKey]
@@ -326,8 +326,9 @@ export default function FarmNodeForm() {
                       Max Threshold
                     </Text>
                     <TextInput
-                      className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-800 focus:border-emerald-600"
+                      className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-main focus:border-emerald-600"
                       placeholder={sensor.maxDefault}
+                      placeholderTextColor="grey"
                       keyboardType="numeric"
                       value={
                         nodeData?.[sensor.maxKey]
