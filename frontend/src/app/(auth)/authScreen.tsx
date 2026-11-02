@@ -10,6 +10,8 @@ import {
   ScrollView,
 } from "react-native";
 import axios from "axios";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuthStore } from "@/store/authStore";
 
 interface AuthScreenProps {
   onAuthenticate: (email: string) => void;
@@ -30,10 +32,13 @@ export default function AuthScreen() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [name, setName] = useState<string>("");
+  const [showPassword, setShowPassword] = useState(true);
   const router = useRouter();
 
+  const signin = useAuthStore((state) => state.signIn);
+
   async function handleSubmit() {
-    if (name.trim() == "" || !validateEmail(email)) {
+    if (!validateEmail(email)) {
       console.log("Enter valid credentials!");
       // warning modal
 
@@ -42,25 +47,31 @@ export default function AuthScreen() {
 
     try {
       if (isLogin) {
-        const res = await axios.post(`${process.env.EXPO_PUBLIC_SERVER}/api/auth/login`, {
-          email,
-          password
-        });
+        const res = await axios.post(
+          `${process.env.EXPO_PUBLIC_SERVER}/api/auth/login`,
+          {
+            email,
+            password,
+          },
+        );
 
+        console.log(res.data);
         if (res.status == 200) {
+          await signin(res.data.user_id);
           router.replace("/(tabs)");
         }
 
         return;
       } else {
-        if (!validatePassword(password)) {
+        if (!validatePassword(password) || name.trim() == "") {
           console.log("Enter valid password!");
           // warning modal
 
           return;
         }
 
-        const res = await axios.post(`${process.env.EXPO_PUBLIC_SERVER}/api/auth/signup`,
+        const res = await axios.post(
+          `${process.env.EXPO_PUBLIC_SERVER}/api/auth/signup`,
           {
             user_name: name,
             email,
@@ -70,8 +81,8 @@ export default function AuthScreen() {
 
         if (res.status == 200) {
           router.push({
-            pathname: '/(auth)/otpScreen',
-            params: { email }
+            pathname: "/(auth)/otpScreen",
+            params: { email },
           });
         } else {
           console.log("There's something wrong with the server.");
@@ -92,7 +103,7 @@ export default function AuthScreen() {
       <ScrollView
         // behavior={Platform.OS === "ios" ? "padding" : "height"}
         contentContainerStyle={{
-          justifyContent: 'center'
+          justifyContent: "center",
         }}
         className="flex-1 bg-background px-6 "
       >
@@ -168,14 +179,28 @@ export default function AuthScreen() {
             <Text className="text-xs font-medium text-muted mb-1 uppercase tracking-wider">
               Password
             </Text>
-            <TextInput
-              className="bg-background border border-gray-300 text-main px-4 py-3.5 rounded-xl text-base"
-              placeholder="••••••••"
-              placeholderTextColor="#9ca3af"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View className="flex-row items-center bg-background border border-gray-300 rounded-xl px-4">
+              <TextInput
+                className="flex-1 py-3.5 text-main text-base"
+                placeholder="••••••••"
+                placeholderTextColor="#9ca3af"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}
+                className="ml-2"
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color="#4b5563"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Action Button */}

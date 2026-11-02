@@ -77,8 +77,8 @@ async function verifyUser(email, password) {
   if (!isMatch) {
     throw new Error("Password doesn't match.");
   }
-
-  return true;
+  console.log(user);
+  return user.user_id;
 }
 
 async function completeRegistration(redisKey) {

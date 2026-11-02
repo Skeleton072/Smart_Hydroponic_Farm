@@ -3,7 +3,7 @@ const supabase = require("../config/supabase");
 async function findByEmail(email) {
   const { data, error } = await supabase
     .from("User")
-    .select("user_name, email, password")
+    .select("user_id, user_name, email, password")
     .eq("email", email)
     .single();
 

@@ -33,9 +33,9 @@ async function login(req, res) {
       return res.status(400).json({ message: "Invalid user credentials!" });
     }
 
-    await verifyUser(email, password);
+    const user_id = await verifyUser(email, password);
 
-    return res.status(200).json({ message: "Successfully logged in." });
+    return res.status(200).json({ message: "Successfully logged in.", user_id });
   } catch (error) {
     console.log("Server Error: ", error.message);
     return res.status(400).json({ message: error.message });
