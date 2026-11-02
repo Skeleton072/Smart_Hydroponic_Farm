@@ -42,7 +42,16 @@ export default function AuthScreen() {
 
     try {
       if (isLogin) {
+        const res = await axios.post(`${process.env.EXPO_PUBLIC_SERVER}/api/auth/login`, {
+          email,
+          password
+        });
 
+        if (res.status == 200) {
+          router.replace("/(tabs)");
+        }
+
+        return;
       } else {
         if (!validatePassword(password)) {
           console.log("Enter valid password!");
@@ -60,11 +69,15 @@ export default function AuthScreen() {
         );
 
         if (res.status == 200) {
-          router.push("/(auth)/otpScreen");
-          return;
+          router.push({
+            pathname: '/(auth)/otpScreen',
+            params: { email }
+          });
+        } else {
+          console.log("There's something wrong with the server.");
         }
 
-        console.log("There's something wrong with the server.");
+        return;
       }
     } catch (error: any) {
       console.log("Error: ", error.message);

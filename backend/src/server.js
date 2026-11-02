@@ -23,7 +23,7 @@ app.use("/api/auth", authRouter);
 // web socket
 const wss = new WebSocket.Server({ port: 8080 });
 
-wss.on("connection", (socket) => {
+wss.on("connection", async (socket) => {
   console.log("WebSocket has started...");
   const subscribedNodes = new Set();
 
@@ -36,42 +36,39 @@ wss.on("connection", (socket) => {
 
         // Validate that the user owns these nodes first.
 
-        const newNodes = nodeIds.filter(
-          id => !subscribedNodes.has(id)
-        );
+        const newNodes = nodeIds.filter((id) => !subscribedNodes.has(id));
 
-        newNodes.forEach(id => subscribedNodes.add(id));
+        newNodes.forEach((id) => subscribedNodes.add(id));
 
         // startMonitoringMany(newNodes, socket);
 
-        socket.send(JSON.stringify({
-          status: "success",
-          action: "sensor_readings",
-          message: `Successfully subscribed to nodes: ${newNodes.join(", ")}`,
-          sensorReadings: {
-            [nodeIds[0]]: {
-              "water_temperature": "25",
-              "humidity": "75",
-              "pH": "6.5",
-              "tds": "700",
-              "timestamp": "10-31-2026"
-            }
-          }
-        }));
+        socket.send(
+          JSON.stringify({
+            status: "success",
+            action: "sensor_readings",
+            message: `Successfully subscribed to nodes: ${newNodes.join(", ")}`,
+            sensorReadings: {
+              [nodeIds[0]]: {
+                temperature: "25",
+                humidity: "75",
+                pH: "6.5",
+                tds: "700",
+                timestamp: "10-31-2026",
+              },
+            },
+          }),
+        );
       }
 
       if (data.action === "unsubscribe_nodes") {
         const nodeIds = data.nodeIds;
 
-        const existingNodes = nodeIds.filter(
-          id => subscribedNodes.has(id)
-        );
+        const existingNodes = nodeIds.filter((id) => subscribedNodes.has(id));
 
-        existingNodes.forEach(id => subscribedNodes.delete(id));
+        existingNodes.forEach((id) => subscribedNodes.delete(id));
 
         // stopMonitoringMany(existingNodes, socket);
       }
-
     } catch (error) {
       console.error("WebSocket message error:", error);
     }

@@ -1,34 +1,36 @@
 const nodemailer = require('nodemailer');
 const config = require('../config/config');
-const { validateEmail } = require("../utils/validate");
+const { validateEmail } = require('../utils/validate');
+
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: config.nodeMailer.emailUser,
+    pass: config.nodeMailer.emailPass,
+  },
+});
 
 async function sendEmail(receiverEmail, subject, html) {
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: config.nodeMailer.emailUser, // Your email address
-      pass: config.nodeMailer.emailPass,          // Your email password or App Password
-    },
-  });
-
   if (!validateEmail(config.nodeMailer.emailUser) || !validateEmail(receiverEmail)) {
-    console.log("Enter valid email!");
-    return;
+    throw new Error('Invalid email address provided for sender or recipient.');
   }
 
-  try {
-    // 2. Define email options
-    const mailOptions = {
-      from: "Smart Hydroponic Farm", 
-      to: receiverEmail,          
-      subject,
-      html,
-    };
+  const mailOptions = {
+    from: `"Smart Hydroponic Farm" <${config.nodeMailer.emailUser}>`,
+    to: receiverEmail,
+    subject,
+    html,
+  };
 
+  try {
     const info = await transporter.sendMail(mailOptions);
     console.log('Email sent successfully! Message ID:', info.messageId);
+    return info;
   } catch (error) {
     console.error('Error sending email:', error);
+    throw error;
   }
 }
 

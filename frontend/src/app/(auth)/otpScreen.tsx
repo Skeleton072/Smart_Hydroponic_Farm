@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import React, { useState, useRef } from "react";
 import {
   View,
@@ -9,16 +9,19 @@ import {
   Platform,
   TextInput as RNTextInput,
 } from "react-native";
+import axios from "axios";
+import { useAuthStore } from "@/store/authStore";
 
 interface OtpScreenProps {
   email: string;
-  onVerify: (otp: string) => void;
-  onBack: () => void;
 }
 
-export default function OtpScreen({ email, onVerify, onBack }: OtpScreenProps) {
+export default function OtpScreen() {
+  const router = useRouter();
+  const { email } = useLocalSearchParams<{ email: string }>();
   const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
   const inputRefs = useRef<(React.ElementRef<typeof RNTextInput> | null)[]>([]);
+  const signIn = useAuthStore((state) => state.signIn);
 
   const handleChangeText = (text: string, index: number) => {
     const newOtp = [...otp];
@@ -37,10 +40,30 @@ export default function OtpScreen({ email, onVerify, onBack }: OtpScreenProps) {
     }
   };
 
-  const handleVerify = () => {
+  async function handleVerify() {
     const code = otp.join("");
-    onVerify(code);
+
+    try {
+      const res = await axios.post(`${process.env.EXPO_PUBLIC_SERVER}/api/auth/verifyOTP`, {
+        email,
+        otp: code
+      });
+      const data = res.data;
+      
+      if (res.status == 200) {
+        await signIn(data.user_id);
+        router.replace("/(tabs)");
+        return;
+      }
+    } catch (error: any) {
+      console.log("Error: ", error.message);
+      return;
+    }
   };
+
+  const onBack = () => {
+    router.back();
+  }
 
   return (
     <>

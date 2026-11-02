@@ -29,10 +29,14 @@ export default function FarmDashboard() {
   const router = useRouter();
 
   const farmNodes = useFarmNodeStore((state) => state.nodes);
-  const isLoading = useFarmNodeStore((state) => state.loading);
+  const isNodesLoading = useFarmNodeStore((state) => state.loading);
+
+  const isSensorsLoading = useSensorStore((state) => state.loading);
   const sensorReadings = useSensorStore((state) => state.sensorReadings);
 
-  if (isLoading) {
+  console.log(sensorReadings);
+
+  if (isNodesLoading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
         <View className="w-full h-full flex items-center justify-center">
@@ -84,7 +88,7 @@ export default function FarmDashboard() {
 
         {/* Farm Nodes List */}
         {/* <View>
-          {isLoading ? (
+          {isNodesLoading ? (
             <View className="flex-1 justify-center items-center">
               <ActivityIndicator size="large" color="#0000ff" />
               <Text className="mt-10 text-sm">Loading assets...</Text>
@@ -101,7 +105,7 @@ export default function FarmDashboard() {
         <View>
           {farmNodes.map((node, idx) => (
             <View key={idx}>
-              <FarmNode node={node} name={node.node_name} imageUrl="salad.jpg" sensorReadings={sensorReadings[node.node_id]}/>
+              <FarmNode node={node} name={node.node_name} imageUrl="salad.jpg" sensorReadings={sensorReadings[node.node_id]} isSensorsLoading={isSensorsLoading}/>
             </View>
           ))}
         </View>
@@ -110,7 +114,7 @@ export default function FarmDashboard() {
   );
 }
 
-function FarmNode({ node, name, imageUrl, sensorReadings }: { node: FarmNodeTypes, name: string; imageUrl: string, sensorReadings: SensorReadingsType }) {
+function FarmNode({ node, name, imageUrl, sensorReadings, isSensorsLoading }: { node: FarmNodeTypes, name: string; imageUrl: string, sensorReadings: SensorReadingsType, isSensorsLoading: boolean }) {
   const router = useRouter();
   const icons: any = [
     <MaterialCommunityIcons name="thermometer" size={20} color="#111827" />,
@@ -120,9 +124,16 @@ function FarmNode({ node, name, imageUrl, sensorReadings }: { node: FarmNodeType
   ];
   const units = ["°C", "%", "pH", " ppm"];
 
-  const { timestamp, ...sensorReading } = sensorReadings;
+  const defaultReadings = { 
+    water_temperature: null, 
+    humidity: null, 
+    pH: null, 
+    tds: null, 
+    timestamp: null 
+  };
 
-  console.log(sensorReading);
+  const readings = (isSensorsLoading || !sensorReadings) ? defaultReadings : sensorReadings;
+  const { timestamp, ...sensorReading } = readings;
 
   return (
     <View className="px-6 mb-5">

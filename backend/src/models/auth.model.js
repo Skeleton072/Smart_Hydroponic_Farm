@@ -7,7 +7,6 @@ async function findByEmail(email) {
     .eq("email", email)
     .single();
 
-  // PGRST116 corresponds to PostgREST code for "No rows found"
   if (error && error.code !== "PGRST116") {
     throw new Error(error.message);
   }
@@ -16,13 +15,17 @@ async function findByEmail(email) {
 }
 
 async function createAccount(user_name, email, hashedPassword) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("User")
-    .insert({ user_name, email, password: hashedPassword });
+    .insert({ user_name, email, password: hashedPassword })
+    .select("user_id")
+    .single();
 
   if (error) throw new Error(error.message);
 
   console.log("Successfully created an account.");
+
+  return data.user_id;
 }
 
 module.exports = { findByEmail, createAccount };

@@ -4,6 +4,7 @@ const argon2 = require("argon2");
 const sendEmail = require("../utils/sendEmail");
 
 async function registerUser(user_name, email, password) {
+  console.log("Registering user...");
   const existingUser = await findByEmail(email);
 
   if (existingUser) {
@@ -85,8 +86,10 @@ async function completeRegistration(redisKey) {
   if (!rawData) throw new Error("Verification session expired or not found.");
 
   const data = JSON.parse(rawData);
-  await createAccount(data.user_name, data.email, data.password_hash);
+  const user_id = await createAccount(data.user_name, data.email, data.password_hash);
   await redisClient.del(redisKey);
+
+  return user_id;
 }
 
 module.exports = { registerUser, verifyUser, completeRegistration };

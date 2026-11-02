@@ -5,7 +5,9 @@ const argon2 = require("argon2");
 
 async function signup(req, res) {
   try {
+    console.log("Signing up user...");
     const { user_name, email, password } = req.body;
+    console.log("password: ", password);
 
     if (!user_name || user_name.trim() === "" || !validatePassword(password) || !validateEmail(email)) {
       console.log("Invalid user credentials!");
@@ -73,9 +75,9 @@ async function verifyOTP(req, res) {
     }
     
     // Successfully verified OTP -> Persist user to Supabase
-    await completeRegistration(redisKey);
+    const user_id = await completeRegistration(redisKey);
 
-    return res.status(200).json({ message: "Account created successfully. Welcome!" });
+    return res.status(200).json({ message: "Account created successfully. Welcome!", user_id });
   } catch (error) {
     console.log("Server Error: ", error.message);
     return res.status(500).json({ message: error.message });

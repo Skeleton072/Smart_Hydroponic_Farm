@@ -1,60 +1,94 @@
-import { useEffect, useRef } from "react";
-import { useFarmNodeStore } from "@/store/farmNodeStore";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useSensorStore } from "@/store/sensorStore";
 
 export function useWebSocket(url: string) {
+  const [isConnected, setIsConnected] = useState(false);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  const farmNodes = useFarmNodeStore((state) => state.nodes);
+  const shouldReconnect = useRef(true);
+
   const setSensorReadings = useSensorStore((state) => state.setSensorReadings);
+  const setLoadingSensors = useSensorStore((state) => state.setLoading);
 
-  useEffect(() => {
-    const socket = new WebSocket(url);
-    socketRef.current = socket;
+  const connect = useCallback(() => {
+    if (!url) return;
 
-    socket.onopen = () => {
-      console.log("WebSocket connected");
+    // Close any existing instances before creating a new one
+    if (socketRef.current) {
+      socketRef.current.close();
+    }
+
+    const ws = new WebSocket(url);
+    socketRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      setIsConnected(true);
+      
+      // Clear any pending reconnection timeouts upon successful connection
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
     };
 
-    socket.onmessage = (event) => {
+    ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         const { status, action } = data;
 
         if (status == 'success' && action == "sensor_readings") {
           const { sensorReadings } = data;
-
           setSensorReadings(sensorReadings);
+          setLoadingSensors(false);
         }
-
+        
       } catch (error) {
         console.error("Failed to parse WebSocket message:", error);
       }
     };
 
-    socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
+    ws.onclose = (event) => {
+      console.log('WebSocket disconnected:', event.reason);
+      setIsConnected(false);
 
-    socket.onclose = () => {
-      console.log("WebSocket disconnected");
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && farmNodes.length > 0) {
-        socketRef.current.send(JSON.stringify({
-          "action": "unsubscribe_node",
-          "nodeId": farmNodes.map((node) => node.node_id),
-        }));
+      // Attempt to reconnect if it wasn't a intentional close
+      if (shouldReconnect.current) {
+        console.log('Reconnecting in 3 seconds...');
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connect();
+        }, 3000); // 3-second delay before retry
       }
     };
 
-    return () => {
-      socket.close();
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      ws.close(); // Triggers onclose to handle reconnection
     };
   }, [url]);
 
-  const sendMessage = (data: object) => {
+  useEffect(() => {
+    shouldReconnect.current = true;
+    connect();
+
+    return () => {
+      shouldReconnect.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+    };
+  }, [connect]);
+
+  const sendMessage = useCallback((data: object) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(data));
+    } else {
+      console.warn('WebSocket is not connected. Message not sent:', data);
     }
-  };
+  }, []);
 
-  return { sendMessage };
+  return { isConnected, sendMessage };
 }

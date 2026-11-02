@@ -1,11 +1,18 @@
 import "../../global.css";
-import { Stack, ThemeProvider, DefaultTheme, useRouter, useSegments } from "expo-router";
+import {
+  Stack,
+  ThemeProvider,
+  DefaultTheme,
+  useRouter,
+  useSegments,
+} from "expo-router";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
 import { useAuthStore } from "@/store/authStore";
 import { useEffect } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { getAllFarmNodes } from "@/services/farmNodeServices";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useSensorStore } from "@/store/sensorStore";
 
 export default function RootLayout() {
   const router = useRouter();
@@ -23,29 +30,29 @@ export default function RootLayout() {
   const setInitialized = useFarmNodeStore((state) => state.setInitialized);
   const nodes = useFarmNodeStore((state) => state.nodes);
 
-  const { sendMessage } = useWebSocket(`${process.env.EXPO_PUBLIC_WEBSOCKET_SERVER}`);
+  // Sensor store state
+  const setLoadingSensors = useSensorStore((state) => state.setLoading);
 
-  // 1. Check local storage for user auth on app boot
+  const { isConnected, sendMessage } = useWebSocket(
+    `${process.env.EXPO_PUBLIC_WEBSOCKET_SERVER}`,
+  );
+
   useEffect(() => {
     checkAuth();
   }, []);
 
-  // 2. Handle protection and redirection based on authentication
   useEffect(() => {
     if (isLoadingAuth) return;
 
-    const inAuthGroup = (segments as string[])[0] === '(auth)';
+    const inAuthGroup = (segments as string[])[0] === "(auth)";
 
     if (!userId && !inAuthGroup) {
-      // Not logged in -> send to login page
-      router.replace('/(auth)/authScreen' as never);
+      router.replace("/(auth)/authScreen" as never);
     } else if (userId && inAuthGroup) {
-      // Logged in but sitting on auth screens -> send to main app index/tabs
-      router.replace('/(tabs)');
+      router.replace("/(tabs)");
     }
   }, [userId, isLoadingAuth, segments]);
 
-  // 3. Initialize Farm Nodes data (Only fetch if user is logged in)
   useEffect(() => {
     if (!userId || initialized) return;
 
@@ -53,6 +60,7 @@ export default function RootLayout() {
 
     async function initialize() {
       setLoadingNodes(true);
+      setLoadingSensors(true);
       try {
         const fetchedNodes = await getAllFarmNodes();
         if (active) {
@@ -75,18 +83,17 @@ export default function RootLayout() {
     };
   }, [userId, initialized]);
 
-  // 4. WebSocket node subscription management
   useEffect(() => {
-    if (initialized && nodes.length > 0) {
+    if (isConnected && initialized && nodes.length > 0) {
       const nodeIds = nodes.map((node) => node.node_id);
-      console.log("_layout.tsx", nodeIds);
+      console.log("Re-subscribing nodes due to connect/reconnect:", nodeIds);
 
       sendMessage({
         action: "subscribe_nodes",
         nodeIds: nodeIds,
       });
     }
-  }, [initialized, nodes]);
+  }, [isConnected, initialized, nodes]);
 
   // Show a clean loading spinner while evaluating storage/auth state
   if (isLoadingAuth) {
@@ -101,7 +108,7 @@ export default function RootLayout() {
     <ThemeProvider value={DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        {/* <Stack.Screen name="(auth)" options={{ headerShown: false }} /> */}
       </Stack>
     </ThemeProvider>
   );
