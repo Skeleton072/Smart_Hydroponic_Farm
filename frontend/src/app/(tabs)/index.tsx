@@ -34,8 +34,6 @@ export default function FarmDashboard() {
   const isSensorsLoading = useSensorStore((state) => state.loading);
   const sensorReadings = useSensorStore((state) => state.sensorReadings);
 
-  console.log(sensorReadings);
-
   if (isNodesLoading) {
     return (
       <SafeAreaView className="flex-1 bg-background">

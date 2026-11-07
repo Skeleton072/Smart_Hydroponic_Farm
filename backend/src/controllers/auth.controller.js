@@ -2,6 +2,7 @@ const { registerUser, verifyUser, completeRegistration } = require("../services/
 const { validatePassword, validateEmail } = require("../utils/validate");
 const redisClient = require("../config/redis");
 const argon2 = require("argon2");
+const { returnHTML, sendEmail } = require("../utils/sendEmail");
 
 async function signup(req, res) {
   try {
@@ -84,4 +85,27 @@ async function verifyOTP(req, res) {
   }
 }
 
-module.exports = { signup, login, verifyOTP };
+async function resendOTP(req, res) {
+  try {
+    const { email } = req.body;
+    const redisKey = `verify:${email}`;
+
+    const rawData = redisClient.get(redisKey);
+    const data = JSON.parse(rawData);
+
+    const newOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHashed = await argon2.hash(newOtpCode);
+
+    const html = returnHTML(newOtpCode);
+    data.otp_hash = otpHashed;
+    await redisClient.set(redisKey, JSON.stringify(data), "EX", 300);
+    await sendEmail(email, "Email Verification", html);
+
+    return res.status(200).json({ message: "Resend OTP successfully." });
+  } catch (error) {
+    console.log("Server Error: ", error.message);
+    return res.status(500).json({ message: error.message });
+  }
+}
+
+module.exports = { signup, login, verifyOTP, resendOTP };

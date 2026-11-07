@@ -1,5 +1,5 @@
 import axios from "axios";
-import { FarmNodeTypes, FarmNodeUploadTypes } from "@/app/(types)/NodeDataType";
+import { FarmNodeUploadTypes } from "@/app/(types)/NodeDataType";
 
 export async function getAllFarmNodes() {
   try {
