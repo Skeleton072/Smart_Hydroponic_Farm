@@ -4,8 +4,8 @@ const { addNewNode, getAllNodes, updateNode, deleteNode } = require("../controll
 const nodeRouter = express.Router();
 
 nodeRouter.post('/addNewNode', addNewNode);
-nodeRouter.post('/updateNode', updateNode);
+nodeRouter.patch('/updateNode/:node_id', updateNode);
 nodeRouter.get('/getAllNodes', getAllNodes);
-nodeRouter.post('/deleteNode', deleteNode);
+nodeRouter.delete('/deleteNode/:node_id', deleteNode);
 
 module.exports = nodeRouter;

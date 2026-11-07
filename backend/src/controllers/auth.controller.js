@@ -1,110 +1,120 @@
-const { registerUser, verifyUser, completeRegistration } = require("../services/auth.service");
+const authService = require("../services/auth.service");
 const { validatePassword, validateEmail } = require("../utils/validate");
-const redisClient = require("../config/redis");
-const argon2 = require("argon2");
-const { returnHTML, sendEmail } = require("../utils/sendEmail");
 
-async function signup(req, res) {
-  try {
-    console.log("Signing up user...");
-    const { user_name, email, password } = req.body;
-    console.log("password: ", password);
-
-    if (!user_name || user_name.trim() === "" || !validatePassword(password) || !validateEmail(email)) {
-      console.log("Invalid user credentials!");
-      return res.status(400).json({ message: "Invalid user credentials!" });
-    }
-
-    await registerUser(user_name, email, password);
-
-    console.log("Verification code sent successfully");
-    return res.status(200).json({ message: "Verification code sent to email." });
-  } catch (error) {
-    console.log("Server Error: ", error.message);
-    return res.status(400).json({ message: error.message });
+// HELPER FUNCTIONS
+function toHttpError(err) {
+  switch (err.code) {
+    case "INVALID_INPUT":
+      return { status: 400, message: "Invalid user credentials!" };
+    case "WRONG_OTP":
+      return { status: 400, message: "Wrong OTP!" };
+    case "OTP_LOCKED":
+      return { status: 429, message: "Too many failed attempts. Verification session locked." };
+    case "OTP_EXPIRED":
+      return { status: 410, message: "Verification session expired or not found." };
+    case "RESEND_COOLDOWN":
+      return { status: 429, message: "Please wait before requesting another code." };
+    case "EMAIL_EXISTS":
+      return { status: 409, message: "Email already registered." };
+    case "INVALID_CREDENTIALS":
+      return { status: 401, message: "Invalid email or password." };
+    default:
+      return { status: 500, message: "Something went wrong. Please try again." };
   }
 }
 
+function handleError(res, err, context) {
+  console.error({ err, context }, `${context} failed`);
+  
+  const { status, message } = toHttpError(err);
+  return res.status(status).json({ message });
+}
+
+/**
+ * POST /auth/signup
+ * Body: { user_name, email, password }
+ */
+async function signup(req, res) {
+  try {
+    const { user_name, email, password } = req.body;
+
+    if (!user_name || user_name.trim() === "" || !validatePassword(password) || !validateEmail(email)) {
+      const err = new Error("Invalid input");
+      err.code = "INVALID_INPUT";
+      throw err;
+    }
+
+    await authService.startSignup(user_name, email, password);
+
+    return res.status(200).json({ message: "Verification code sent to email." });
+  } catch (error) {
+    return handleError(res, error, "signup");
+  }
+}
+
+/**
+ * POST /auth/login
+ * Body: { email, password }
+ */
 async function login(req, res) {
   try {
     const { email, password } = req.body;
 
     if (!validateEmail(email) || !validatePassword(password)) {
-      console.log("Invalid user credentials!");
-      return res.status(400).json({ message: "Invalid user credentials!" });
+      const err = new Error("Invalid credentials");
+      err.code = "INVALID_CREDENTIALS";
+      throw err;
     }
 
-    const user_id = await verifyUser(email, password);
+    const user_id = await authService.authenticate(email, password);
 
     return res.status(200).json({ message: "Successfully logged in.", user_id });
   } catch (error) {
-    console.log("Server Error: ", error.message);
-    return res.status(400).json({ message: error.message });
+    return handleError(res, error, "login");
   }
 }
 
+/**
+ * POST /auth/verifyOTP
+ * Body: { email, otp }
+ */
 async function verifyOTP(req, res) {
   try {
     const { email, otp } = req.body;
-    const redisKey = `verify:${email}`;
 
-    const [rawData, ttl] = await Promise.all([
-      redisClient.get(redisKey),
-      redisClient.ttl(redisKey)
-    ]);
-
-    if (!rawData || ttl < 0) {
-      console.log("Error: Verification session expired or not found.");
-      return res.status(400).json({ message: "Verification session expired or not found." });
+    if (!validateEmail(email) || otp.length != 6) {
+      const err = new Error("Invalid input");
+      err.code = "INVALID_INPUT";
+      throw err;
     }
 
-    const data = JSON.parse(rawData);
-    const isOtpMatch = await argon2.verify(data.otp_hash, otp);
-
-    if (!isOtpMatch) {
-      console.log("Wrong OTP!");
-      data.attempts += 1;
-
-      if (data.attempts >= 3) {
-        await redisClient.del(redisKey);
-        console.log("Error: Too many failed attempts. Verification session locked.");
-        return res.status(400).json({ message: "Too many failed attempts. Verification session locked." });
-      }
-
-      await redisClient.set(redisKey, JSON.stringify(data), "EX", ttl);
-      return res.status(400).json({ message: "Wrong OTP!" });
-    }
-    
-    // Successfully verified OTP -> Persist user to Supabase
-    const user_id = await completeRegistration(redisKey);
+    const user_id = await authService.verifyOtp(email, otp);
 
     return res.status(200).json({ message: "Account created successfully. Welcome!", user_id });
   } catch (error) {
-    console.log("Server Error: ", error.message);
-    return res.status(500).json({ message: error.message });
+    return handleError(res, error, "verifyOTP");
   }
 }
 
+/**
+ * POST /auth/resendOTP
+ * Body: { email }
+ */
 async function resendOTP(req, res) {
   try {
     const { email } = req.body;
-    const redisKey = `verify:${email}`;
+    
+    if (!validateEmail(email)) {
+      const err = new Error("Invalide input");
+      err.code = "INVALID_INPUT";
+      throw err
+    }
 
-    const rawData = redisClient.get(redisKey);
-    const data = JSON.parse(rawData);
+    await authService.resendOtp( email );
 
-    const newOtpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpHashed = await argon2.hash(newOtpCode);
-
-    const html = returnHTML(newOtpCode);
-    data.otp_hash = otpHashed;
-    await redisClient.set(redisKey, JSON.stringify(data), "EX", 300);
-    await sendEmail(email, "Email Verification", html);
-
-    return res.status(200).json({ message: "Resend OTP successfully." });
+    return res.status(200).json({ message: "Verification code resent." });
   } catch (error) {
-    console.log("Server Error: ", error.message);
-    return res.status(500).json({ message: error.message });
+    return handleError(res, error, "resendOTP");
   }
 }
 

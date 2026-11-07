@@ -1,6 +1,6 @@
 function validatePassword(password) {
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)\S+$/;
-  return passwordRegex.test(password);
+  return passwordRegex.test(password) && password.length >= 8;
 }
 
 function validateEmail(email) {

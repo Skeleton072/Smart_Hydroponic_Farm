@@ -13,6 +13,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { Ionicons } from "@expo/vector-icons";
 import LoadingModal from "../(modals)/loadingModal";
+import { authApi } from "@/api/authApi";
 
 export default function OtpScreen() {
   const router = useRouter();
@@ -72,13 +73,12 @@ export default function OtpScreen() {
     setIsLoading(true);
 
     try {
-      // const res = await authApi.verifyOtp({ email, otp: code });
-      const res = { status: 401 }
+      const res = await authApi.verifyOtp({ email, otp: code });
       
       if (res.status === 200 || res.status === 201) {
-        // await signIn(res.data.user_id);
-        // router.replace("/(tabs)");
-        console.log("Way to go!");
+        await signIn(res.data.user_id);
+        router.replace("/(tabs)");
+        // console.log("Way to go!");
       } else {
         triggerShakeAndError();
         setTimeout(() => {
@@ -87,7 +87,9 @@ export default function OtpScreen() {
       }
     } catch (error: any) {
       triggerShakeAndError();
-      setOtp(["", "", "", "", "", ""]);
+      setTimeout(() => {
+        setOtp(["", "", "", "", "", ""]);
+      }, 500);
     } finally {
       setIsLoading(false);
     }

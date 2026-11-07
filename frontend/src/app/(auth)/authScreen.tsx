@@ -46,6 +46,7 @@ function getErrorMessage(error: unknown): string {
       `Request failed (${axiosErr.response.status}). Please try again.`
     );
   }
+  
   return "Something went wrong. Please try again.";
 }
 

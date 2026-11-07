@@ -1,121 +1,78 @@
-const supabase = require("../config/supabase");
+const nodeService = require("../services/node.service");
 
+// HELPER FUNCTIONS
+function toHttpError(err) {
+  switch (err.code) {
+    case "INVALID_INPUT":
+      return { status: 400, message: err.message };
+    case "NODE_NOT_FOUND":
+      return { status: 404, message: "Node not found." };
+    case "FORBIDDEN":
+      return { status: 403, message: "You do not have access to this node." };
+    case "CONFLICT":
+      return { status: 409, message: err.message };
+    default:
+      return { status: 500, message: "Something went wrong. Please try again." };
+  }
+}
+
+function handleError(res, err, context) {
+  console.error({ err, context }, `${context} failed`);
+
+  const { status, message } = toHttpError(err);
+  return res.status(status).json({ message });
+}
+
+/*
+* POST /node/addNewNode
+* Body: { user_id, node_name, min_temperature, max_temperature, min_humidity, max_humidity, min_pH, max_pH, min_tds, max_tds }
+*/
 async function addNewNode(req, res) {
   try {
-    const {
-      node_name,
-      min_temperature,
-      max_temperature,
-      min_humidity,
-      max_humidity,
-      min_pH,
-      max_pH,
-      min_tds,
-      max_tds,
-    } = req.body;
+    const node_id = await nodeService.createNode(req.body, req.user.user_id);
 
-    const { data, error } = await supabase
-      .from("Nodes")
-      .insert({
-        node_name,
-        min_temperature,
-        max_temperature,
-        min_humidity,
-        max_humidity,
-        min_pH,
-        max_pH,
-        min_tds,
-        max_tds,
-      })
-      .select()
-      .single();
-
-    if (error) return res.status(400).json({ message: error.message });
-
-    console.log("Successfully uploaded new node.");
-    return res
-      .status(200)
-      .json({
+    return res.status(200).json({
         message: "Successfully uploaded new node",
-        node_id: data.node_id,
+        node_id
       });
   } catch (error) {
-    console.log("Error: ", error.message);
-    return res.status(500).json({ message: error.message });
+    return handleError(res, error, "addNewNode");
   }
 }
 
-// need transaction??
+/**
+ * POST /node/getAllNodes
+ */
 async function getAllNodes(req, res) {
   try {
-    const { data, error } = await supabase
-      .from("Nodes")
-      .select(
-        "node_id, node_name, min_temperature, max_temperature, min_humidity, max_humidity, min_pH, max_pH, min_tds, max_tds",
-      );
-
-    if (error) return res.status(400).json({ message: error.message });
-
-    console.log("Successfully selected all nodes");
-
-    return res.status(200).json({ data });
+    const nodes = await nodeService.listNodes(req.user.id);
+    return res.status(200).json({ data: nodes });
   } catch (error) {
-    console.log("Error: " + error.message);
-    return res.status(500).json({ message: error.message });
+    return handleError(res, error, "getAllNodes");
   }
 }
 
+/**
+ * PATCH /node/updateNode/:node_id
+ */
 async function updateNode(req, res) {
   try {
-    const {
-      node_name,
-      node_id,
-      min_temperature,
-      max_temperature,
-      min_humidity,
-      max_humidity,
-      min_pH,
-      max_pH,
-      min_tds,
-      max_tds,
-    } = req.body;
-
-    const { _, error } = await supabase.from("Nodes").update({
-      node_name,
-      min_temperature,
-      max_temperature,
-      min_humidity,
-      max_humidity,
-      min_pH,
-      max_pH,
-      min_tds,
-      max_tds,
-    }).eq('node_id', node_id);
-
-    if (error) return res.status(400).json({ message: error.message });
-
-    return res.status(200).json({ message: "Successfully updated."});
-  } catch (error) {
-    console.log("Error: ", error.message);
-    return res.status(500).json({ message: error.message });
+    const node = await nodeService.updateNode(req.params.node_id, req.body, req.user.id);
+    return res.status(200).json({ message: "Node updated.", node });
+  } catch (err) {
+    return handleError(res, err, "updateNode");
   }
 }
 
+/**
+ * DELETE /node/deleteNode/:node_id
+ */
 async function deleteNode(req, res) {
   try {
-    const { node_id } = req.body;
-
-    const { _, error } = await supabase
-      .from("Nodes")
-      .delete()
-      .eq("node_id", node_id);
-
-    if (error) return res.status(400).json({ message: error.message });
-
-    return res.status(200).json({ message: "Successfully deleted."});
-  } catch (error) {
-    console.log("Error: ", error.message);
-    return res.status(500).json({ message: error.message });
+    await nodeService.deleteNode(req.params.node_id, req.user.id);
+    return res.status(204).end();
+  } catch (err) {
+    return handleError(res, err, "deleteNode");
   }
 }
 
