@@ -1,8 +1,9 @@
 require('dotenv').config();
-const supabase = require('./supabaseConfig');
-const mqtt = require('./mqttConfig');
-const nodeMailer = require('./nodeMailer');
-const redis = require('./redisConfig');
+const supabase = require('./supabase.config');
+const mqtt = require('./mqtt.config');
+const nodeMailer = require('./nodeMailer.config');
+const redis = require('./redis.config');
+const jwt = require('./jwt.config');
 
 module.exports = {
   port: process.env.PORT || 3000,
@@ -11,4 +12,5 @@ module.exports = {
   mqtt,
   nodeMailer,
   redis,
+  jwt,
 }

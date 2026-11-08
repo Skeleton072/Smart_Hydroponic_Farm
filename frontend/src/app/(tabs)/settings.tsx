@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, Switch, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ShowMessageModal from '../(modals)/showMessageModal';
-import { useAuthStore } from '@/store/authStore';
 import { useRouter } from 'expo-router';
+import * as SecureStorage from 'expo-secure-store';
 
 // --- Type Definitions ---
 interface SettingToggleProps {
@@ -83,11 +83,13 @@ export default function SettingsScreen() {
   const [pushAlerts, setPushAlerts] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
 
-  const signout = useAuthStore((state) => state.signOut);
+  // const signout = useAuthStore((state) => state.signOut);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsModalVisible(false);
-    signout();
+    await SecureStorage.deleteItemAsync("accessToken");
+    await SecureStorage.deleteItemAsync("refreshToken");
+    // signout();
 
     router.replace("/(auth)/authScreen");
     console.log("Successfully logged out of the system.");

@@ -10,7 +10,6 @@ import {
   TextInput as RNTextInput,
   Animated,
 } from "react-native";
-import { useAuthStore } from "@/store/authStore";
 import { Ionicons } from "@expo/vector-icons";
 import LoadingModal from "../(modals)/loadingModal";
 import { authApi } from "@/api/authApi";
@@ -25,7 +24,6 @@ export default function OtpScreen() {
 
   const inputRefs = useRef<(React.ElementRef<typeof RNTextInput> | null)[]>([]);
   const shakeAnimation = useRef(new Animated.Value(0)).current;
-  const signIn = useAuthStore((state) => state.signIn);
 
   const triggerShakeAndError = () => {
     setIsError(true);
@@ -64,7 +62,7 @@ export default function OtpScreen() {
 
   async function handleVerify() {
     const code = otp.join("");
-
+    console.log(code);
     if (code.length < 6) {
       triggerShakeAndError();
       return;
@@ -73,12 +71,10 @@ export default function OtpScreen() {
     setIsLoading(true);
 
     try {
-      const res = await authApi.verifyOtp({ email, otp: code });
-      
-      if (res.status === 200 || res.status === 201) {
-        await signIn(res.data.user_id);
+      const status = await authApi.verifyOtp({ email, otp: code });
+      console.log(status);
+      if (status === 200 || status === 201) {
         router.replace("/(tabs)");
-        // console.log("Way to go!");
       } else {
         triggerShakeAndError();
         setTimeout(() => {

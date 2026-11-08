@@ -25,7 +25,7 @@ function handleError(res, err, context) {
 
 /*
 * POST /node/addNewNode
-* Body: { user_id, node_name, min_temperature, max_temperature, min_humidity, max_humidity, min_pH, max_pH, min_tds, max_tds }
+* Body: { node_name, min_temperature, max_temperature, min_humidity, max_humidity, min_pH, max_pH, min_tds, max_tds }
 */
 async function addNewNode(req, res) {
   try {
@@ -45,7 +45,7 @@ async function addNewNode(req, res) {
  */
 async function getAllNodes(req, res) {
   try {
-    const nodes = await nodeService.listNodes(req.user.id);
+    const nodes = await nodeService.listNodes(req.user.user_id);
     return res.status(200).json({ data: nodes });
   } catch (error) {
     return handleError(res, error, "getAllNodes");
@@ -57,7 +57,7 @@ async function getAllNodes(req, res) {
  */
 async function updateNode(req, res) {
   try {
-    const node = await nodeService.updateNode(req.params.node_id, req.body, req.user.id);
+    const node = await nodeService.updateNode(req.params.node_id, req.body, req.user.user_id);
     return res.status(200).json({ message: "Node updated.", node });
   } catch (err) {
     return handleError(res, err, "updateNode");
@@ -69,7 +69,7 @@ async function updateNode(req, res) {
  */
 async function deleteNode(req, res) {
   try {
-    await nodeService.deleteNode(req.params.node_id, req.user.id);
+    await nodeService.deleteNode(req.params.node_id, req.user.user_id);
     return res.status(204).end();
   } catch (err) {
     return handleError(res, err, "deleteNode");

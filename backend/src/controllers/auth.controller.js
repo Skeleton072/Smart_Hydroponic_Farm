@@ -1,4 +1,5 @@
 const authService = require("../services/auth.service");
+const { generateAccessToken, generateRefreshToken } = require("../utils/tokenHandling");
 const { validatePassword, validateEmail } = require("../utils/validate");
 
 // HELPER FUNCTIONS
@@ -18,6 +19,10 @@ function toHttpError(err) {
       return { status: 409, message: "Email already registered." };
     case "INVALID_CREDENTIALS":
       return { status: 401, message: "Invalid email or password." };
+    case "INVALID_TOKEN":
+      return { status: 401, message: "Invalid token."};
+    case "INVALID_REFRESH":
+      return { status: 401, message: "Refresh token expired or somethng."};
     default:
       return { status: 500, message: "Something went wrong. Please try again." };
   }
@@ -33,6 +38,7 @@ function handleError(res, err, context) {
 /**
  * POST /auth/signup
  * Body: { user_name, email, password }
+ * @returns { message }
  */
 async function signup(req, res) {
   try {
@@ -55,6 +61,7 @@ async function signup(req, res) {
 /**
  * POST /auth/login
  * Body: { email, password }
+ * @returns { message, accessToken, refreshToken }
  */
 async function login(req, res) {
   try {
@@ -68,7 +75,10 @@ async function login(req, res) {
 
     const user_id = await authService.authenticate(email, password);
 
-    return res.status(200).json({ message: "Successfully logged in.", user_id });
+    const accessToken = await generateAccessToken({ user_id });
+    const refreshToken = await generateRefreshToken({ user_id });
+
+    return res.status(200).json({ message: "Successfully logged in.", accessToken, refreshToken });
   } catch (error) {
     return handleError(res, error, "login");
   }
@@ -77,6 +87,7 @@ async function login(req, res) {
 /**
  * POST /auth/verifyOTP
  * Body: { email, otp }
+ * @returns { message, accessToken, refreshToken }
  */
 async function verifyOTP(req, res) {
   try {
@@ -88,9 +99,13 @@ async function verifyOTP(req, res) {
       throw err;
     }
 
+    // should we use transaction in case generating token goes wrong
     const user_id = await authService.verifyOtp(email, otp);
 
-    return res.status(200).json({ message: "Account created successfully. Welcome!", user_id });
+    const accessToken = await generateAccessToken({ user_id });
+    const refreshToken = await generateRefreshToken({ user_id });
+
+    return res.status(200).json({ message: "Account created successfully. Welcome!", accessToken, refreshToken });
   } catch (error) {
     return handleError(res, error, "verifyOTP");
   }
@@ -99,6 +114,7 @@ async function verifyOTP(req, res) {
 /**
  * POST /auth/resendOTP
  * Body: { email }
+ * @returns { message }
  */
 async function resendOTP(req, res) {
   try {
@@ -118,4 +134,49 @@ async function resendOTP(req, res) {
   }
 }
 
-module.exports = { signup, login, verifyOTP, resendOTP };
+/**
+ * POST /auth/refresh
+ * Body: { refreshToken }
+ * @returns { accessToken, refreshToken }
+ */
+async function refresh(req, res) {
+  try {
+    const { refreshToken } = req.body;
+
+    if (refreshToken.trim() == "") {
+      const err = new Error("Missing Token!");
+      err.code = "INVALID_TOKEN";
+      throw err;
+    }
+
+    const refreshHash = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("base64url");
+    const rawToken = await redisClient.get(`refresh:${refreshHash}`);
+    if (!rawToken) {
+      const err = new Error("Invalid or expired refresh token");
+      err.code = "INVALID_REFRESH";
+      throw err;
+    }
+
+    const { user_id } = JSON.parse(rawToken);
+
+    await redisClient.multi()
+      .del(`refresh:${refreshHash}`)
+      .sRem(`refresh:user:${user_id}`, refreshHash)
+      .exec();
+
+    const newAccessToken = await generateAccessToken({ user_id });
+    const newRefreshToken = await generateRefreshToken({ user_id });
+
+    return res.status(200).json({
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+    });
+  } catch (error) {
+    return handleError(res, error, "refresh");
+  }
+}
+
+module.exports = { signup, login, verifyOTP, resendOTP, refresh };

@@ -26,7 +26,6 @@ async function loadVerification(email) {
   try {
     return JSON.parse(rawData);
   } catch (cause) {
-    // Corrupt payload
     await redisClient.del(verifyKey(email));
     console.log({ email }, "Corrupt verification record purged");
     throw serviceError("OTP_EXPIRED", cause);
@@ -93,6 +92,8 @@ async function startSignup(user_name, email, password) {
  */
 async function authenticate(email, password) {
   const user = await findByEmail(email);
+
+  console.log(email, password);
 
   const hash = user?.password ?? "$argon2id$v=19$m=65536,t=3,p=4$invalid$invalid";
   const isMatch = await argon2.verify(hash, password).catch(() => false);

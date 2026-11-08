@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import * as SecureStore from "expo-secure-store";
 
 interface LoginPayload {
   email: string;
@@ -16,19 +17,45 @@ interface verifyOtpPayload {
   otp: string;
 }
 
+interface refreshPayload {
+  refreshToken: string;
+}
+
 export const authApi = {
   login: async (payload: LoginPayload) => {
     const response = await apiClient.post("/api/auth/login", payload);
-    return response.data; // Returns { user_id: string, ... }
+    
+    // should we hash??
+    await SecureStore.setItemAsync("accessToken", response.data.accessToken);
+    await SecureStore.setItemAsync("refreshToken", response.data.refreshToken);
+
+    return response.status;
   },
 
   signup: async (payload: SignupPayload) => {
     const response = await apiClient.post("/api/auth/signup", payload);
-    return response.data;
+    return response.status;
   },
 
   verifyOtp: async (payload: verifyOtpPayload) => {
     const response = await apiClient.post("/api/auth/verifyOTP", payload);
-    return { status: response.status, data: response.data }
-  }
+    console.log("response returns", response.data);
+
+    // should we hash??
+    await SecureStore.setItemAsync("accessToken", response.data.accessToken);
+    await SecureStore.setItemAsync("refreshToken", response.data.refreshToken);
+
+    console.log("store -> ok");
+    return response.status
+  },
+
+  refresh: async (payload: refreshPayload) => {
+    const response = await apiClient.post("/api/auth/refresh", payload);
+
+    // should we hash??
+    await SecureStore.setItemAsync("accessToken", response.data.accessToken);
+    await SecureStore.setItemAsync("refreshToken", response.data.refreshToken);
+
+    return response.status;
+  },
 };

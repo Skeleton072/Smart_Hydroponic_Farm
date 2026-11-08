@@ -7,21 +7,17 @@ import {
   useSegments,
 } from "expo-router";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
-import { useAuthStore } from "@/store/authStore";
-import { useEffect } from "react";
+// import { useAuthStore } from "@/store/authStore";
+import { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { getAllFarmNodes } from "@/services/farmNodeServices";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useSensorStore } from "@/store/sensorStore";
+import * as SecureStorage from "expo-secure-store";
+import { authApi } from "@/api/authApi";
 
 export default function RootLayout() {
   const router = useRouter();
-  const segments = useSegments();
-
-  // Auth store state
-  const userId = useAuthStore((state) => state.userId);
-  const isLoadingAuth = useAuthStore((state) => state.isLoading);
-  const checkAuth = useAuthStore((state) => state.checkAuth);
 
   // Farm Node store state
   const setNodes = useFarmNodeStore((state) => state.setNodes);
@@ -29,6 +25,8 @@ export default function RootLayout() {
   const initialized = useFarmNodeStore((state) => state.initialized);
   const setInitialized = useFarmNodeStore((state) => state.setInitialized);
   const nodes = useFarmNodeStore((state) => state.nodes);
+
+  const [isLoading, setIsLoading] = useState(false);
 
   // Sensor store state
   const setLoadingSensors = useSensorStore((state) => state.setLoading);
@@ -38,20 +36,32 @@ export default function RootLayout() {
   // );
 
   useEffect(() => {
+    async function checkAuth() {
+      try {
+        setIsLoading(true);
+        const refreshToken = await SecureStorage.getItemAsync("refreshToken");
+
+        if (refreshToken == null) {
+          router.replace("/(auth)/authScreen");
+          return;
+        }
+
+        const status = await authApi.refresh({ refreshToken });
+        if (status == 200) {
+          router.replace("/(tabs)");
+          // need to fetch all the nodes
+        } else {
+          router.replace("/(auth)/authScreen");
+        }
+      } catch (error: any) {
+        console.log("Error: ", error.message);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
     checkAuth();
   }, []);
-
-  useEffect(() => {
-    if (isLoadingAuth) return;
-
-    const inAuthGroup = (segments as string[])[0] === "(auth)";
-
-    if (!userId && !inAuthGroup) {
-      router.replace("/(auth)/authScreen" as never);
-    } else if (userId && inAuthGroup) {
-      router.replace("/(tabs)");
-    }
-  }, [userId, isLoadingAuth, segments]);
 
   // useEffect(() => {
   //   if (!userId || initialized) return;
@@ -96,7 +106,7 @@ export default function RootLayout() {
   // }, [isConnected, initialized, nodes]);
 
   // Show a clean loading spinner while evaluating storage/auth state
-  if (isLoadingAuth) {
+  if (isLoading) {
     return (
       <View className="flex-1 justify-center items-center bg-background">
         <ActivityIndicator size="large" color="#2563eb" />

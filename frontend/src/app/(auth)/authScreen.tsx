@@ -12,7 +12,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import axios, { AxiosError } from "axios";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuthStore } from "@/store/authStore";
 import LoadingModal from "../(modals)/loadingModal";
 import { authApi } from "@/api/authApi";
 
@@ -53,7 +52,6 @@ function getErrorMessage(error: unknown): string {
 export default function AuthScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const signIn = useAuthStore((state) => state.signIn);
 
   // Form State
   const [isLogin, setIsLogin] = useState<boolean>(true);
@@ -92,18 +90,20 @@ export default function AuthScreen() {
 
     try {
       if (isLogin) {
-        // api call
-        const data = await authApi.login({ email, password });
+        const status = await authApi.login({ email, password });
 
-        // store user_id in local
-        await signIn(data.user_id);
-        router.replace("/(tabs)");
+        if (status == 200) {
+          router.replace("/(tabs)");
+        }
       } else {
-        // await authApi.signup({ user_name: name.trim(), email, password });
-        router.push({
-          pathname: "/(auth)/otpScreen",
-          params: { email },
-        });
+        const status = await authApi.signup({ user_name: name.trim(), email, password });
+        
+        if (status == 200) {
+          router.push({
+            pathname: "/(auth)/otpScreen",
+            params: { email },
+          });
+        }
       }
     } catch (error: unknown) {
       const message = getErrorMessage(error);

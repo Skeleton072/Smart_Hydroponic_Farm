@@ -12,6 +12,8 @@ const nodeRouter = require("./routes/node.route");
 const authRouter = require("./routes/auth.route");
 const mqttClient = require("./config/mqtt");
 const WebSocket = require("ws");
+const redisClient = require("./config/redis");
+const config = require("./config/config");
 // const { startMonitoringMany, stopMonitoringMany } = require("../services/monitoringService");
 const app = express();
 
@@ -116,6 +118,6 @@ wss.on("connection", async (socket) => {
 //   console.error("Connection error:", err);
 // });
 
-app.listen(3000, () => {
+app.listen(3000, async () => {
   console.log("Server is listening at port 3000");
 });
