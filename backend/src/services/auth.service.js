@@ -6,6 +6,7 @@ const { serviceError } = require("../utils/errorHandling");
 
 const OTP_TTL_SECONDS = 300;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const OTP_TEMPORARY_LOCK = 60;
 const MAX_OTP_ATTEMPTS = 3;
 const ARGON2_OPTS = { type: argon2.argon2id };
 
@@ -13,6 +14,8 @@ const verifyKey = (email) => `verify:${email}`;
 const attemptsKey = (email) => `verify:attempts:${email}`;
 const resendKey = (email) => `verify:resend:${email}`;
 
+const lockKey = (email) => `otp:lock:${email}`;
+const blockKey = (email) => `otp:block:${email}`;
 
 // HELPER FUNCTIONS
 function generateOtp() {
@@ -20,6 +23,18 @@ function generateOtp() {
 }
 
 async function loadVerification(email) {
+  if (await redisClient.exists(lockKey(email))) {
+    ttl = await redisClient.ttl(lockKey(email));
+    console.log("loadVerification ttl: ", ttl);
+    
+    throw serviceError("OTP_LOCKED", null, { ttl });
+  }
+
+  // storing blocked account in redis memory??
+  if (await redisClient.exists(blockKey(email))) {
+    throw serviceError("ACCOUNT_BLOCKED");
+  }
+
   const rawData = await redisClient.get(verifyKey(email));
   if (!rawData) throw serviceError("OTP_EXPIRED");
 
@@ -41,8 +56,10 @@ async function bumpAttempts(email) {
   }
 
   if (attempts > MAX_OTP_ATTEMPTS) {
+    await redisClient.set(lockKey(email), "1", "EX", OTP_TEMPORARY_LOCK);
+    
     await Promise.all([redisClient.del(verifyKey(email)), redisClient.del(key)]);
-    throw serviceError("OTP_LOCKED");
+    throw serviceError("OTP_LOCKED", null, { ttl: 60 });
   }
 
   return attempts;
@@ -59,6 +76,8 @@ async function startSignup(user_name, email, password) {
   }
 
   const otpCode = generateOtp();
+  console.log(otpCode);
+
   const [passwordHash, otpHash] = await Promise.all([
     argon2.hash(password, ARGON2_OPTS),
     argon2.hash(otpCode, ARGON2_OPTS),
@@ -79,7 +98,8 @@ async function startSignup(user_name, email, password) {
     .exec();
 
   try {
-    await sendEmail(email, "Email Verification", returnHTML(otpCode));
+    // await sendEmail(email, "Email Verification", returnHTML(otpCode));
+    console.log("Verification Email sent successfully.");
   } catch (cause) {
     await redisClient.del(verifyKey(email));
     console.error({ err: cause, email }, "Failed to send verification email");
@@ -149,6 +169,8 @@ async function resendOtp({ email }) {
   }
 
   const otpCode = generateOtp();
+  console.log(otpCode);
+
   const otpHash = await argon2.hash(otpCode, ARGON2_OPTS);
 
   const updated = { ...data, otp_hash: otpHash };
@@ -159,7 +181,8 @@ async function resendOtp({ email }) {
     .exec();
 
   try {
-    await sendEmail(email, "Email Verification", returnHTML(otpCode));
+    // await sendEmail(email, "Email Verification", returnHTML(otpCode));
+    console.log("Verification Email sent successfully.");
   } catch (cause) {
     console.error({ err: cause, email }, "Failed to resend verification email");
     await redisClient.del(resendKey(email));

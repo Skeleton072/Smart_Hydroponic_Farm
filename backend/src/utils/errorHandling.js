@@ -1,7 +1,10 @@
-function serviceError(code, cause) {
+function serviceError(code, cause, data = {}) {
   const err = new Error(code);
   err.code = code;
   if (cause) err.cause = cause;
+
+  Object.assign(err, data);
+
   return err;
 }
 

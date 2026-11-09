@@ -1,10 +1,14 @@
 const authService = require("../services/auth.service");
 const { generateAccessToken, generateRefreshToken } = require("../utils/tokenHandling");
 const { validatePassword, validateEmail } = require("../utils/validate");
+const crypto = require("crypto");
+const redisClient = require("../config/redis");
 
 // HELPER FUNCTIONS
 function toHttpError(err) {
   switch (err.code) {
+    case "ACCOUNT_BLOCKED":
+      return { status: 403, message: "Account Blocked"};
     case "INVALID_INPUT":
       return { status: 400, message: "Invalid user credentials!" };
     case "WRONG_OTP":
@@ -32,6 +36,10 @@ function handleError(res, err, context) {
   console.error({ err, context }, `${context} failed`);
   
   const { status, message } = toHttpError(err);
+
+  if (status == 429 && err.ttl !== undefined) {
+    return res.status(status).json({ message, retryAfter: err.ttl });
+  }
   return res.status(status).json({ message });
 }
 
@@ -99,7 +107,7 @@ async function verifyOTP(req, res) {
       throw err;
     }
 
-    // should we use transaction in case generating token goes wrong
+    // should we use transaction in case generating token goes wrong??
     const user_id = await authService.verifyOtp(email, otp);
 
     const accessToken = await generateAccessToken({ user_id });
@@ -117,6 +125,7 @@ async function verifyOTP(req, res) {
  * @returns { message }
  */
 async function resendOTP(req, res) {
+  // haven't test if this work
   try {
     const { email } = req.body;
     
@@ -153,6 +162,8 @@ async function refresh(req, res) {
       .createHash("sha256")
       .update(refreshToken)
       .digest("base64url");
+
+    // stores refreshToken in redis memory??
     const rawToken = await redisClient.get(`refresh:${refreshHash}`);
     if (!rawToken) {
       const err = new Error("Invalid or expired refresh token");
@@ -164,7 +175,7 @@ async function refresh(req, res) {
 
     await redisClient.multi()
       .del(`refresh:${refreshHash}`)
-      .sRem(`refresh:user:${user_id}`, refreshHash)
+      .srem(`refresh:user:${user_id}`, refreshHash)
       .exec();
 
     const newAccessToken = await generateAccessToken({ user_id });

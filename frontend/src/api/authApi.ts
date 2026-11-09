@@ -17,6 +17,10 @@ interface verifyOtpPayload {
   otp: string;
 }
 
+interface resendOtpPayload {
+  email: string;
+}
+
 interface refreshPayload {
   refreshToken: string;
 }
@@ -39,14 +43,18 @@ export const authApi = {
 
   verifyOtp: async (payload: verifyOtpPayload) => {
     const response = await apiClient.post("/api/auth/verifyOTP", payload);
-    console.log("response returns", response.data);
 
     // should we hash??
     await SecureStore.setItemAsync("accessToken", response.data.accessToken);
     await SecureStore.setItemAsync("refreshToken", response.data.refreshToken);
 
-    console.log("store -> ok");
-    return response.status
+    return response;
+  },
+
+  resendOtp: async (payload: resendOtpPayload) => {
+    const response = await apiClient.post("/api/auth/resendOTP", payload);
+
+    return response;
   },
 
   refresh: async (payload: refreshPayload) => {
@@ -56,6 +64,7 @@ export const authApi = {
     await SecureStore.setItemAsync("accessToken", response.data.accessToken);
     await SecureStore.setItemAsync("refreshToken", response.data.refreshToken);
 
+    console.log(response);
     return response.status;
   },
 };
