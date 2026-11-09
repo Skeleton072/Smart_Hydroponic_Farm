@@ -17,13 +17,13 @@ const config = require("./config/config");
 // const { startMonitoringMany, stopMonitoringMany } = require("../services/monitoringService");
 const app = express();
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use("/api/node", nodeRouter);
 app.use("/api/auth", authRouter);
 
 // web socket
-const wss = new WebSocket.Server({ port: 8080 });
+const wss = new WebSocket.Server({ port: 8160 });
 
 wss.on("connection", async (socket) => {
   console.log("WebSocket has started...");

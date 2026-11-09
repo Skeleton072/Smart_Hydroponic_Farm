@@ -1,5 +1,5 @@
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,39 +12,41 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import LoadingModal from "../(modals)/loadingModal";
-import { authApi } from "@/api/authApi";
-
-const LOCK_TEMPORARY = 166;
-const LOCK_BLOCKED_SELF_UNLOCK = 141;
-const LOCK_BLOCKED_ADMIN = 138;
+import { authApi, ApiError } from "@/api/authApi";
+import * as SecureStore from "expo-secure-store";
 
 type LockState =
   | { type: "none" }
   | { type: "temporary"; remainingSeconds: number }
   | { type: "permanent"; canSelfUnlock: boolean; message?: string };
 
+const formatRemaining = (s: number) =>
+  `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+
 export default function OtpScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const params = useLocalSearchParams<{ email?: string | string[] }>();
+  const email = Array.isArray(params.email) ? params.email[0] : params.email;
 
   const [isLoading, setIsLoading] = useState(false);
   const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
-  const [isError, setIsError] = useState<boolean>(false);
+  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [lock, setLock] = useState<LockState>({ type: "none" });
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   const inputRefs = useRef<(React.ElementRef<typeof RNTextInput> | null)[]>([]);
-  const shakeAnimation = useRef(new Animated.Value(0)).current;
+  const shake = useRef(new Animated.Value(0)).current;
 
-  // Countdown timer for temporary lockout
+  // Countdown
   useEffect(() => {
     if (lock.type !== "temporary") return;
-
     setRemainingSeconds(lock.remainingSeconds);
-    const interval = setInterval(() => {
+
+    const id = setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(id);
           setLock({ type: "none" });
           return 0;
         }
@@ -52,81 +54,80 @@ export default function OtpScreen() {
       });
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(id);
   }, [lock]);
-
-  const formatRemaining = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
 
   const isLocked = lock.type !== "none";
   const isTemporaryLock = lock.type === "temporary";
   const isPermanentLock = lock.type === "permanent";
 
-  const triggerShakeAndError = () => {
+  const shakeAndError = useCallback((message: string) => {
     setIsError(true);
+    setErrorMessage(message);
 
     Animated.sequence([
-      Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnimation, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnimation, { toValue: -10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnimation, { toValue: 0, duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 10,  duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 10,  duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0,   duration: 50, useNativeDriver: true }),
     ]).start();
 
+    setTimeout(() => setIsError(false), 500);
+  }, [shake]);
+
+  const resetOtp = useCallback(() => {
+    setOtp(["", "", "", "", "", ""]);
+    // Refocus the first box after the reset has been committed.
     setTimeout(() => {
-      setIsError(false);
-    }, 500);
-  };
+      inputRefs.current[0]?.focus();
+    }, 0);
+  }, []);
 
-  const applyLock = (status: number, data?: any) => {
-    if (status === 429) {
-      const retryAfter = data?.retryAfter ?? 60;
-      setLock({ type: "temporary", remainingSeconds: retryAfter });
-      return true;
-    }
+  // Centralized server-error handling
+  const applyServerError = useCallback((err: ApiError): boolean => {
+    if (err.status === 429) {
+      const retry = err.retryAfter ?? 60;
+      // setLock({ type: "temporary", remainingSeconds: retry });
+      resetOtp();
 
-    if (status === 403) {
-      setLock({
-        type: "permanent",
-        canSelfUnlock: false,
-        message: data?.message ?? "Your account has been blocked. Please contact support.",
+      router.replace({
+        pathname: "/(auth)/authScreen",
+        params: {
+          email,
+          lockUntil: String(Date.now() + retry * 1000),
+        },
       });
       return true;
     }
 
-    // if (status === LOCK_BLOCKED_SELF_UNLOCK) {
-    //   setLock({
-    //     type: "permanent",
-    //     canSelfUnlock: true,
-    //     message: data?.message ?? "Your account is blocked. You can reset it to unlock.",
-    //   });
-    //   return true;
-    // }
+    if (err.status === 403) {
+      setLock({
+        type: "permanent",
+        canSelfUnlock: false,
+        message: err.message,
+      });
+      return true;
+    }
 
-    // if (status === LOCK_BLOCKED_ADMIN) {
-    //   setLock({
-    //     type: "permanent",
-    //     canSelfUnlock: false,
-    //     message: data?.message ?? "Your account is blocked. Please contact the administrator.",
-    //   });
-    //   return true;
-    // }
+    if (err.status === 410) {
+      router.replace({
+        pathname: "/(auth)/authScreen",
+        params: email ? { email } : {},
+      });
+      return true;
+    }
+
     return false;
-  };
+  }, [resetOtp, router]);
 
   const handleChangeText = (text: string, index: number) => {
     if (isLocked) return;
-
-    const newOtp = [...otp];
-    newOtp[index] = text;
-    setOtp(newOtp);
-
-    if (text && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
+    const digit = text.replace(/\D/g, "").slice(-1);
+    const next = [...otp];
+    next[index] = digit;
+    setOtp(next);
+    if (digit && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
   const handleKeyPress = (e: any, index: number) => {
@@ -135,99 +136,77 @@ export default function OtpScreen() {
     }
   };
 
-  async function handleVerify() {
-    if (isLocked) return;
+  const handleVerify = async () => {
+    if (isLocked || isLoading) return;
 
     const code = otp.join("");
-
     if (code.length < 6) {
-      triggerShakeAndError();
+      shakeAndError("Please enter the full 6-digit code.");
+      return;
+    }
+
+    if (!email) {
+      setLock({ type: "permanent", canSelfUnlock: false, message: "Missing email. Please sign up again." });
       return;
     }
 
     setIsLoading(true);
-
     try {
-      const { status, data } = await authApi.verifyOtp({ email, otp: code });
-      console.log("otpScreen: ", status);
-      console.log("otpScreen: ", data);
+      const res = await authApi.verifyOtp({ email, otp: code });
 
-      if (status === 200 || status === 201) {
-        router.replace("/(tabs)");
-        return;
-      }
+      await SecureStore.setItemAsync("accessToken", res.data.accessToken);
+      await SecureStore.setItemAsync("refreshToken", res.data.refreshToken);
 
-      if (applyLock(status, data)) {
-        setOtp(["", "", "", "", "", ""]);
-        return;
-      }
-
-      triggerShakeAndError();
-      setTimeout(() => {
-        setOtp(["", "", "", "", "", ""]);
-      }, 500);
-    } catch (error: any) {
-      // Some APIs surface lock state via error.response
-      const status = error?.response?.status;
-      const data = error?.response?.data;
-
-      console.log("Catch block: ");
-      console.log("status: ", status);
-      console.log("data  : ", data);
-
-      if (status && applyLock(status, data)) {
-        setOtp(["", "", "", "", "", ""]);
-        return;
-      }
-
-      if (status == 410) { // OTP expired
-        router.back();
-        return;
-      }
-
-      triggerShakeAndError();
-      setTimeout(() => {
-        setOtp(["", "", "", "", "", ""]);
-      }, 500);
+      router.replace("/(tabs)");
+    } catch (err) {
+      const apiErr = err instanceof ApiError ? err : new ApiError(0, "Network error.");
+      if (applyServerError(apiErr)) return;
+      shakeAndError(apiErr.message || "Incorrect verification code.");
+      setTimeout(resetOtp, 500);
     } finally {
       setIsLoading(false);
     }
-  }
-
-  async function handleResendOTP() {
-    if (isLocked) return;
-
-    try {
-      const { status, data } = await authApi.resendOtp({ email });
-
-      if (applyLock(status, data)) return;
-
-      if (status === 200) {
-        console.log("OTP code resent successfully");
-      }
-    } catch (error: any) {
-      const status = error?.response?.status;
-      const data = error?.response?.data;
-
-      if (status && applyLock(status, data)) return;
-
-      if (status == 410) { // OTP expired
-        router.back();
-        return;
-      }
-
-      console.log("Error: ", error.message);
-    }
-  }
-
-  const onBack = () => {
-    router.back();
   };
+
+  const handleResendOTP = async () => {
+    if (isLocked || isLoading || !email) return;
+    setIsLoading(true);
+    try {
+      await authApi.resendOtp({ email });
+      setErrorMessage("A new code has been sent.");
+      setIsError(false);
+    } catch (err) {
+      const apiErr = err instanceof ApiError ? err : new ApiError(0, "Network error.");
+      if (applyServerError(apiErr)) return;
+      shakeAndError(apiErr.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onBack = () => router.back();
+
+  const renderBox = (index: number) => (
+    <TextInput
+      key={index}
+      ref={(el) => { inputRefs.current[index] = el; }}
+      editable={!isLocked}
+      className={`w-12 h-14 bg-background border text-main text-center text-xl font-bold rounded-xl focus:border-black ${
+        isError ? "border-red-500 bg-red-50" : "border-gray-300"
+      } ${isLocked ? "opacity-50" : ""}`}
+      maxLength={1}
+      keyboardType="number-pad"
+      autoComplete="sms-otp"
+      textContentType="oneTimeCode"
+      value={otp[index]}
+      onChangeText={(t) => handleChangeText(t, index)}
+      onKeyPress={(e) => handleKeyPress(e, index)}
+    />
+  );
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-
       <LoadingModal visible={isLoading} message="Verifying OTP. Please wait..." />
 
       <KeyboardAvoidingView
@@ -235,88 +214,41 @@ export default function OtpScreen() {
         className="flex-1 bg-background justify-center px-6"
       >
         <View className="bg-surface py-8 px-2 rounded-3xl shadow-lg border border-gray-200 flex flex-col items-center">
-          {/* Header */}
           <View className="items-center mb-8">
             <View className="w-12 h-12 bg-primary/10 rounded-full items-center justify-center mb-4">
               <View className="w-6 h-6 bg-accent rounded-full" />
             </View>
-            <Text className="text-3xl font-bold text-main text-center">
-              Verify Code
-            </Text>
+            <Text className="text-3xl font-bold text-main text-center">Verify Code</Text>
             <Text className="text-muted text-sm mt-2 text-center">
               We've sent a 6-digit verification code to{" "}
-              <Text className="text-main font-semibold">
-                {email || "your email"}
-              </Text>
+              <Text className="text-main font-semibold">{email || "your email"}</Text>
             </Text>
           </View>
 
-          {/* OTP Input Boxes wrapped with Shake Animation */}
           <Animated.View
-            style={{ transform: [{ translateX: shakeAnimation }] }}
+            style={{ transform: [{ translateX: shake }] }}
             className="flex-col items-center justify-between gap-2 mb-8 w-full"
           >
             <View className="flex-row items-center justify-between w-full">
-              {otp.slice(0, 3).map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(el) => {
-                    inputRefs.current[index] = el;
-                  }}
-                  editable={!isLocked}
-                  className={`w-12 h-14 bg-background border text-main text-center text-xl font-bold rounded-xl focus:border-black ${
-                    isError ? "border-red-500 bg-red-50" : "border-gray-300"
-                  } ${isLocked ? "opacity-50" : ""}`}
-                  maxLength={1}
-                  keyboardType="number-pad"
-                  value={digit}
-                  onChangeText={(text) => handleChangeText(text, index)}
-                  onKeyPress={(e) => handleKeyPress(e, index)}
-                />
-              ))}
-
+              {[0, 1, 2].map(renderBox)}
               <View className="items-center justify-center">
                 <Ionicons name="remove" size={17} color="#9ca3af" />
               </View>
-
-              {otp.slice(3, 6).map((digit, index) => {
-                const actualIndex = index + 3;
-                return (
-                  <TextInput
-                    key={actualIndex}
-                    ref={(el) => {
-                      inputRefs.current[actualIndex] = el;
-                    }}
-                    editable={!isLocked}
-                    className={`w-12 h-14 bg-background border text-main text-center text-xl font-bold rounded-xl focus:border-black ${
-                      isError ? "border-red-500 bg-red-50" : "border-gray-300"
-                    } ${isLocked ? "opacity-50" : ""}`}
-                    maxLength={1}
-                    keyboardType="number-pad"
-                    value={digit}
-                    onChangeText={(text) => handleChangeText(text, actualIndex)}
-                    onKeyPress={(e) => handleKeyPress(e, actualIndex)}
-                  />
-                );
-              })}
+              {[3, 4, 5].map(renderBox)}
             </View>
 
-            {/* Incorrect code error */}
             {isError && !isLocked && (
               <Text className="text-red-500 text-xs text-center mt-2 font-medium">
-                Incorrect verification code. Please try again.
+                {errorMessage || "Incorrect verification code. Please try again."}
               </Text>
             )}
 
-            {/* Temporary lockout notice with countdown */}
             {isTemporaryLock && (
               <Text className="text-amber-600 text-xs text-center mt-2 font-medium">
-                Too many attempts. Try again in{" "}
-                {formatRemaining(remainingSeconds)}.
+                Too many attempts. Try again in {formatRemaining(remainingSeconds)}.
               </Text>
             )}
 
-            {/* Permanent block notice */}
             {isPermanentLock && (
               <Text className="text-red-600 text-xs text-center mt-2 font-medium">
                 {lock.message}
@@ -324,22 +256,15 @@ export default function OtpScreen() {
             )}
           </Animated.View>
 
-          {/* Verify Button */}
           {!isPermanentLock && (
             <TouchableOpacity
-              disabled={isLocked}
+              disabled={isLocked || isLoading}
               className={`p-4 w-[80%] rounded-pill items-center shadow-md mb-6 ${
-                isLocked
-                  ? "bg-gray-300"
-                  : "bg-primary active:bg-primary-hover"
+                isLocked ? "bg-gray-300" : "bg-primary active:bg-primary-hover"
               }`}
               onPress={handleVerify}
             >
-              <Text
-                className={`font-bold text-base ${
-                  isLocked ? "text-gray-500" : "text-surface"
-                }`}
-              >
+              <Text className={`font-bold text-base ${isLocked ? "text-gray-500" : "text-surface"}`}>
                 {isTemporaryLock
                   ? `Locked (${formatRemaining(remainingSeconds)})`
                   : "Verify & Proceed"}
@@ -347,37 +272,22 @@ export default function OtpScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Resend & Back links */}
           <View className="items-center space-y-2">
             {isPermanentLock && lock.canSelfUnlock ? (
-              <TouchableOpacity
-                onPress={() => {
-                  // TODO: navigate to your unlock/reset flow
-                  router.push("/unlock" as any);
-                }}
-                className="mt-2"
-              >
-                <Text className="text-primary font-medium text-sm underline">
-                  Unlock my account
-                </Text>
+              <TouchableOpacity onPress={() => router.push("/unlock" as any)} className="mt-2">
+                <Text className="text-primary font-medium text-sm underline">Unlock my account</Text>
               </TouchableOpacity>
             ) : (
               <Text className="text-primary font-medium text-sm">
                 Didn't receive the code?{" "}
-                <TouchableOpacity
-                  disabled={isLocked}
-                  onPress={handleResendOTP}
+                <Text
+                  onPress={isLocked || isLoading ? undefined : handleResendOTP}
+                  className={`underline decoration-solid ${
+                    isLocked ? "color-gray-400 decoration-gray-400" : "color-red-500 decoration-red-900"
+                  }`}
                 >
-                  <Text
-                    className={`underline decoration-solid ${
-                      isLocked
-                        ? "color-gray-400 decoration-gray-400"
-                        : "color-red-500 decoration-red-900"
-                    }`}
-                  >
-                    Resend
-                  </Text>
-                </TouchableOpacity>
+                  Resend
+                </Text>
               </Text>
             )}
 

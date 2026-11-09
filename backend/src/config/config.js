@@ -4,6 +4,7 @@ const mqtt = require('./mqtt.config');
 const nodeMailer = require('./nodeMailer.config');
 const redis = require('./redis.config');
 const jwt = require('./jwt.config');
+const otp = require('./otp.config');
 
 module.exports = {
   port: process.env.PORT || 3000,
@@ -13,4 +14,5 @@ module.exports = {
   nodeMailer,
   redis,
   jwt,
+  otp,
 }

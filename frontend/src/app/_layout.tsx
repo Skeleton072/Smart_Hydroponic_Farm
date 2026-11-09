@@ -40,16 +40,19 @@ export default function RootLayout() {
       try {
         setIsLoading(true);
         const refreshToken = await SecureStorage.getItemAsync("refreshToken");
-
+        console.log(refreshToken);
+        
         if (refreshToken == null) {
           router.replace("/(auth)/authScreen");
           return;
         }
 
-        const status = await authApi.refresh({ refreshToken });
+        const { status, data } = await authApi.refresh({ refreshToken });
         if (status == 200) {
+          await SecureStorage.setItemAsync("accessToken", data.accessToken);
+          await SecureStorage.setItemAsync("refreshToken", data.refreshToken);
+
           router.replace("/(tabs)");
-          // need to fetch all the nodes
         } else {
           router.replace("/(auth)/authScreen");
         }

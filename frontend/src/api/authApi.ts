@@ -1,70 +1,62 @@
-import { apiClient } from "./client";
-import * as SecureStore from "expo-secure-store";
+import axios, { AxiosError } from "axios";
 
-interface LoginPayload {
-  email: string;
-  password: string;
+const http = axios.create({ 
+  baseURL: process.env.EXPO_PUBLIC_SERVER, 
+  timeout: 15000, 
+  headers: {
+    "Content-Type": "application/json",
+  }
+});
+
+export interface AuthTokens { accessToken: string; refreshToken: string; }
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  retryAfter?: number;
+  constructor(status: number, message: string, code?: string, retryAfter?: number) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.retryAfter = retryAfter;
+  }
 }
 
-interface SignupPayload {
-  user_name: string;
-  email: string;
-  password: string;
+function normalize(err: unknown): ApiError {
+  if (axios.isAxiosError(err)) {
+    const e = err as AxiosError<{ message?: string; code?: string; retryAfter?: number }>;
+    if (e.code === "ECONNABORTED" || !e.response) {
+      return new ApiError(0, "Network error. Check your connection and try again.");
+    }
+
+    const d = e.response.data;
+    return new ApiError(e.response.status, d?.message ?? "Request failed.", d?.code, d?.retryAfter);
+  }
+
+  return new ApiError(0, "Something went wrong. Please try again.");
 }
 
-interface verifyOtpPayload {
-  email: string;
-  otp: string;
-}
-
-interface resendOtpPayload {
-  email: string;
-}
-
-interface refreshPayload {
-  refreshToken: string;
+async function request<T>(fn: () => Promise<{ status: number; data: T }>): Promise<{ status: number; data: T }> {
+  try { return await fn(); }
+  catch (e) { throw normalize(e); }
 }
 
 export const authApi = {
-  login: async (payload: LoginPayload) => {
-    const response = await apiClient.post("/api/auth/login", payload);
-    
-    // should we hash??
-    await SecureStore.setItemAsync("accessToken", response.data.accessToken);
-    await SecureStore.setItemAsync("refreshToken", response.data.refreshToken);
+  login: (body: { email: string; password: string }) =>
+    request(() => http.post<AuthTokens>("/api/auth/login", body)),
 
-    return response.status;
-  },
+  signup: (body: { user_name: string; email: string; password: string }) =>
+    request(() => http.post<{ message: string }>("/api/auth/signup", body)),
 
-  signup: async (payload: SignupPayload) => {
-    const response = await apiClient.post("/api/auth/signup", payload);
-    return response.status;
-  },
+  verifyOtp: (body: { email: string; otp: string }) =>
+    request(() => http.post<AuthTokens>("/api/auth/verifyOTP", body)),
 
-  verifyOtp: async (payload: verifyOtpPayload) => {
-    const response = await apiClient.post("/api/auth/verifyOTP", payload);
+  resendOtp: (body: { email: string }) =>
+    request(() => http.post<{ message: string }>("/api/auth/resendOTP", body)),
 
-    // should we hash??
-    await SecureStore.setItemAsync("accessToken", response.data.accessToken);
-    await SecureStore.setItemAsync("refreshToken", response.data.refreshToken);
+  refresh: (body: { refreshToken: string }) =>
+    request(() => http.post<AuthTokens>("/api/auth/refresh", body)),
 
-    return response;
-  },
-
-  resendOtp: async (payload: resendOtpPayload) => {
-    const response = await apiClient.post("/api/auth/resendOTP", payload);
-
-    return response;
-  },
-
-  refresh: async (payload: refreshPayload) => {
-    const response = await apiClient.post("/api/auth/refresh", payload);
-
-    // should we hash??
-    await SecureStore.setItemAsync("accessToken", response.data.accessToken);
-    await SecureStore.setItemAsync("refreshToken", response.data.refreshToken);
-
-    console.log(response);
-    return response.status;
-  },
+  logout: (body: { refreshToken: string }) =>
+    request(() => http.post<void>("/auth/logout", body)),
 };

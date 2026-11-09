@@ -1,52 +1,84 @@
 const { findByEmail, createAccount } = require("../models/auth.model");
 const redisClient = require("../config/redis");
 const argon2 = require("argon2");
+const crypto = require("crypto");
 const { sendEmail, returnHTML } = require("../utils/sendEmail");
-const { serviceError } = require("../utils/errorHandling");
+const { serviceError, CODES } = require("../utils/errorHandling");
+const config = require("../config/config");
 
-const OTP_TTL_SECONDS = 300;
+const OTP_TTL_SECONDS = 600;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
-const OTP_TEMPORARY_LOCK = 60;
+const OTP_TEMPORARY_LOCK_SECONDS = 60;
 const MAX_OTP_ATTEMPTS = 3;
-const ARGON2_OPTS = { type: argon2.argon2id };
+const SIGNUP_COOLDOWN_SECONDS = 60;
 
-const verifyKey = (email) => `verify:${email}`;
+const OTP_PEPPER = config.otp.otpPepper;
+
+const ARGON2_OPTS = {
+  type: argon2.argon2id,
+  memoryCost: 19456, // ~19 MiB, OWASP 2024 recommendation for argon2id
+  timeCost: 2,
+  parallelism: 1,
+};
+
+const verifyKey   = (email) => `verify:${email}`;
 const attemptsKey = (email) => `verify:attempts:${email}`;
-const resendKey = (email) => `verify:resend:${email}`;
+const resendKey   = (email) => `verify:resend:${email}`;
+const lockKey     = (email) => `otp:lock:${email}`;
+const blockKey    = (email) => `otp:block:${email}`;
+const signupKey   = (email) => `signup:cooldown:${email}`;
 
-const lockKey = (email) => `otp:lock:${email}`;
-const blockKey = (email) => `otp:block:${email}`;
-
-// HELPER FUNCTIONS
+// ---------- helpers ----------
 function generateOtp() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
-async function loadVerification(email) {
-  if (await redisClient.exists(lockKey(email))) {
-    ttl = await redisClient.ttl(lockKey(email));
-    console.log("loadVerification ttl: ", ttl);
-    
-    throw serviceError("OTP_LOCKED", null, { ttl });
-  }
+function hashOtp(otp) {
+  return crypto.createHmac("sha256", OTP_PEPPER).update(otp).digest("hex");
+}
 
-  // storing blocked account in redis memory??
-  if (await redisClient.exists(blockKey(email))) {
-    throw serviceError("ACCOUNT_BLOCKED");
+function safeEqualHex(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+
+  // Buffer.from() -> a fixed-length sequence of bytes stored outside the V8 JavaScript engine heap, 
+  //                  specifically designed to handle raw binary data
+  const ab = Buffer.from(a, "hex");
+  const bb = Buffer.from(b, "hex");
+  if (ab.length !== bb.length) return false;
+
+  return crypto.timingSafeEqual(ab, bb);
+};
+
+async function loadVerification(email) {
+  const [lockTTL, isBlocked] = await Promise.all([
+    redisClient.ttl(lockKey(email)),
+    redisClient.exists(blockKey(email)),
+  ]);
+
+  if (lockTTL > 0) {
+    throw serviceError(CODES.OTP_LOCKED, null, { ttl: lockTTL });
+  }
+  
+  if (isBlocked) {
+    throw serviceError(CODES.ACCOUNT_BLOCKED);
   }
 
   const rawData = await redisClient.get(verifyKey(email));
-  if (!rawData) throw serviceError("OTP_EXPIRED");
+  if (!rawData) throw serviceError(CODES.OTP_EXPIRED);
 
   try {
     return JSON.parse(rawData);
   } catch (cause) {
     await redisClient.del(verifyKey(email));
-    console.log({ email }, "Corrupt verification record purged");
-    throw serviceError("OTP_EXPIRED", cause);
+    throw serviceError(CODES.OTP_EXPIRED, cause);
   }
 }
 
+/**
+ * Increments attempt counter.
+ * Does NOT throw on lock — caller decides HTTP shape.
+ * @returns { attempts, locked }
+ */
 async function bumpAttempts(email) {
   const key = attemptsKey(email);
   const attempts = await redisClient.incr(key);
@@ -55,107 +87,143 @@ async function bumpAttempts(email) {
     await redisClient.expire(key, OTP_TTL_SECONDS);
   }
 
-  if (attempts > MAX_OTP_ATTEMPTS) {
-    await redisClient.set(lockKey(email), "1", "EX", OTP_TEMPORARY_LOCK);
-    
-    await Promise.all([redisClient.del(verifyKey(email)), redisClient.del(key)]);
-    throw serviceError("OTP_LOCKED", null, { ttl: 60 });
+  if (attempts >= MAX_OTP_ATTEMPTS) {
+    const ttl = OTP_TEMPORARY_LOCK_SECONDS;
+    await redisClient
+      .multi()
+      .set(lockKey(email), "1", "EX", ttl)
+      // .del(verifyKey(email))
+      .del(key)
+      .exec();
+
+    return { attempts, locked: true, ttl };
   }
 
-  return attempts;
+  return { attempts, locked: false };
 }
 
-/**
- * @throws { EMAIL_EXISTS, EMAIL_SEND_FAILED }
- */
+// ---------- public API ----------
 async function startSignup(user_name, email, password) {
-  const existingUser = await findByEmail(email);
-
-  if (existingUser) {
-    throw serviceError("EMAIL_EXISTS");
+  const existing = await findByEmail(email);
+  if (existing) {
+    throw serviceError(CODES.EMAIL_EXISTS);
   }
 
-  const otpCode = generateOtp();
-  console.log(otpCode);
+  const acquired = await redisClient.set(
+    signupKey(email),
+    "1",
+    "EX",
+    SIGNUP_COOLDOWN_SECONDS,
+    "NX"
+  );
+  if (acquired === null) throw serviceError(CODES.TOO_MANY_REQUESTS);
 
-  const [passwordHash, otpHash] = await Promise.all([
+  const otpCode = generateOtp();
+  const otpHash = hashOtp(otpCode);
+
+  // why Promise.all() ??
+  const [passwordHash] = await Promise.all([
     argon2.hash(password, ARGON2_OPTS),
-    argon2.hash(otpCode, ARGON2_OPTS),
   ]);
 
-  const verificationRecord = {
+  const record = {
     email,
     user_name,
     password_hash: passwordHash,
     otp_hash: otpHash,
-    attempts: 0
   };
 
-  await redisClient
+  const execResult = await redisClient
     .multi()
-    .set(verifyKey(email), JSON.stringify(verificationRecord), "EX", OTP_TTL_SECONDS)
+    .set(verifyKey(email), JSON.stringify(record), "EX", OTP_TTL_SECONDS)
     .set(resendKey(email), "1", "EX", OTP_RESEND_COOLDOWN_SECONDS)
+    .del(attemptsKey(email))
     .exec();
+
+  if (execResult.some(([err]) => err)) {
+    await redisClient.del(verifyKey(email)).catch(() => {});
+    throw serviceError(CODES.INTERNAL);
+  }
 
   try {
     // await sendEmail(email, "Email Verification", returnHTML(otpCode));
-    console.log("Verification Email sent successfully.");
+    console.log("OTP code sent successfully: ", otpCode);
   } catch (cause) {
-    await redisClient.del(verifyKey(email));
-    console.error({ err: cause, email }, "Failed to send verification email");
-    throw serviceError("EMAIL_SEND_FAILED", cause);
+    await redisClient.multi()
+      .del(verifyKey(email))
+      .del(resendKey(email))
+      .exec();
+    throw serviceError(CODES.EMAIL_SEND_FAILED, cause);
   }
 }
 
-/**
- * @throws { INVALID_CREDENTIALS }
- */
 async function authenticate(email, password) {
   const user = await findByEmail(email);
 
-  console.log(email, password);
+  const hash = user?.password;
 
-  const hash = user?.password ?? "$argon2id$v=19$m=65536,t=3,p=4$invalid$invalid";
-  const isMatch = await argon2.verify(hash, password).catch(() => false);
+  let isMatch = false;
+  try {
+    isMatch = await argon2.verify(hash, password);
+  } catch {
+    isMatch = false;
+  }
 
   if (!user || !isMatch) {
-    throw serviceError("INVALID_CREDENTIALS");
+    throw serviceError(CODES.INVALID_CREDENTIALS);
   }
-  
+
   return user.user_id;
 }
 
-/**
- * @returns { user_id }
- * @throws { WRONG_OTP }
- */
 async function verifyOtp(email, otp) {
   const data = await loadVerification(email);
 
-  const isMatch = await argon2.verify(data.otp_hash, otp).catch(() => false);
+  const incoming = hashOtp(otp);
+  const isMatch = safeEqualHex(incoming, data.otp_hash);
+
   if (!isMatch) {
-    await bumpAttempts(email);
-    throw serviceError("WRONG_OTP");
+    const { locked, ttl } = await bumpAttempts(email);
+    if (locked) throw serviceError(CODES.OTP_LOCKED, null, { ttl });
+    throw serviceError(CODES.WRONG_OTP);
   }
 
-  const user_id = await createAccount(data.user_name, data.email, data.password_hash);
+  // Claim the verification record atomically to prevent double-signup races.
+  const claimed = await redisClient.del(verifyKey(email));
+  if (claimed === 0) {
+    // Someone else already consumed it.
+    throw serviceError(CODES.OTP_EXPIRED);
+  }
+
+  let user_id;
+  try {
+    user_id = await createAccount(data.user_name, data.email, data.password_hash);
+  } catch (cause) {
+    // Best-effort: restore so user can retry (unless it's a duplicate-email race).
+    if (cause?.code === "EMAIL_EXISTS" || cause?.code === "23505") {
+      await Promise.all([
+        redisClient.del(attemptsKey(email)),
+        redisClient.del(resendKey(email)),
+      ]);
+    } else {
+      await redisClient.set(verifyKey(email), JSON.stringify(data), "EX", OTP_TTL_SECONDS);
+    }
+
+    throw cause?.isServiceError ? cause : serviceError(CODES.INTERNAL, cause);
+  }
 
   await Promise.all([
-    redisClient.del(verifyKey(email)),
     redisClient.del(attemptsKey(email)),
     redisClient.del(resendKey(email)),
+    redisClient.del(signupKey(email)),
   ]);
 
   return user_id;
 }
 
-/**
- * @throws { RESEND_COOLDOWN }
- */
-async function resendOtp({ email }) {
+async function resendOtp(email) {
   const data = await loadVerification(email);
 
-  // NX -> Not eXist, only created if the key doesn't exist in database
   const acquired = await redisClient.set(
     resendKey(email),
     "1",
@@ -163,31 +231,36 @@ async function resendOtp({ email }) {
     OTP_RESEND_COOLDOWN_SECONDS,
     "NX"
   );
-
-  if (acquired === null) {
-    throw serviceError("RESEND_COOLDOWN");
-  }
+  if (acquired === null) throw serviceError(CODES.RESEND_COOLDOWN);
 
   const otpCode = generateOtp();
-  console.log(otpCode);
+  const updated = { ...data, otp_hash: hashOtp(otpCode) };
 
-  const otpHash = await argon2.hash(otpCode, ARGON2_OPTS);
-
-  const updated = { ...data, otp_hash: otpHash };
-
-  await redisClient.multi()
+  const execResult = await redisClient
+    .multi()
     .set(verifyKey(email), JSON.stringify(updated), "EX", OTP_TTL_SECONDS)
     .del(attemptsKey(email))
     .exec();
 
+  if (execResult.some(([err]) => err)) {
+    await redisClient.del(resendKey(email)).catch(() => {});
+    throw serviceError(CODES.INTERNAL);
+  }
+
   try {
     // await sendEmail(email, "Email Verification", returnHTML(otpCode));
-    console.log("Verification Email sent successfully.");
+    console.log("OTP code resent successfully: ", otpCode);
   } catch (cause) {
-    console.error({ err: cause, email }, "Failed to resend verification email");
-    await redisClient.del(resendKey(email));
-    throw serviceError("EMAIL_SEND_FAILED", cause);
+    await redisClient.del(resendKey(email)).catch(() => {});
+    throw serviceError(CODES.EMAIL_SEND_FAILED, cause);
   }
 }
 
-module.exports = { startSignup, authenticate, verifyOtp, resendOtp };
+async function logout(user_id, refreshTokenHash) {
+  await redisClient.multi()
+    .del(`refresh:${refreshTokenHash}`)
+    .srem(`refresh:user:${user_id}`, refreshTokenHash)
+    .exec();
+}
+
+module.exports = { startSignup, authenticate, verifyOtp, resendOtp, logout };

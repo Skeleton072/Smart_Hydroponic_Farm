@@ -4,6 +4,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ShowMessageModal from '../(modals)/showMessageModal';
 import { useRouter } from 'expo-router';
 import * as SecureStorage from 'expo-secure-store';
+import { authApi } from '@/api/authApi';
 
 // --- Type Definitions ---
 interface SettingToggleProps {
@@ -86,14 +87,26 @@ export default function SettingsScreen() {
   // const signout = useAuthStore((state) => state.signOut);
 
   const handleLogout = async () => {
-    setIsModalVisible(false);
-    await SecureStorage.deleteItemAsync("accessToken");
-    await SecureStorage.deleteItemAsync("refreshToken");
-    // signout();
+    // setIsLoading(true);
+    
+    try {
+      const refreshToken = (await SecureStorage.getItemAsync("refreshToken")) ?? "";
+      if (refreshToken) {
+        await authApi.logout({ refreshToken });
+      }
+    } catch (err) {
+      console.warn("[logout] server revocation failed:", err);
+    } finally {
+      await Promise.allSettled([
+        SecureStorage.deleteItemAsync("accessToken"),
+        SecureStorage.deleteItemAsync("refreshToken"),
+      ]);
 
-    router.replace("/(auth)/authScreen");
-    console.log("Successfully logged out of the system.");
-    return;
+      setIsModalVisible(false);
+
+      router.replace("/(auth)/authScreen");
+      // setIsLoading(false);
+    }
   };
 
   return (
