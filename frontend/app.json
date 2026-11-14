@@ -10,11 +10,13 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "infoPlist": {
-        "NSLocalNetworkUsageDescription": "The app requires access to the local network so it can..."
+        "NSLocalNetworkUsageDescription": "The app requires access to the local network so it can...",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "entitlements": {
         "com.apple.developer.networking.wifi-info": true
-      }
+      },
+      "bundleIdentifier": "com.anonymous.frontend"
     },
     "android": {
       "adaptiveIcon": {
@@ -94,6 +96,7 @@
       "eas": {
         "projectId": "ef4e0a00-db14-4cf7-9067-b74f0b5b949c"
       }
-    }
+    },
+    "owner": "chocolate78"
   }
 }
