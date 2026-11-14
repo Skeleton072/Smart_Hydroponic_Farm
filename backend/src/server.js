@@ -21,6 +21,9 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use("/api/node", nodeRouter);
 app.use("/api/auth", authRouter);
+app.get("/api/testing", (req, res) => {
+  return res.status(200).json({ message: "It is working..." });
+});
 
 // web socket
 const wss = new WebSocket.Server({ port: 8160 });

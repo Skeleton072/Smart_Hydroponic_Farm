@@ -96,6 +96,7 @@ async function resendOTP(req, res) {
 // POST /auth/refresh
 async function refresh(req, res) {
   try {
+    console.log("it is refreshing...");
     const { refreshToken } = req.body ?? {};
 
     if (typeof refreshToken !== "string" || refreshToken.trim() === "") {
