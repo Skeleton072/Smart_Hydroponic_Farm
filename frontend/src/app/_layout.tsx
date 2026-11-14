@@ -15,6 +15,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { useSensorStore } from "@/store/sensorStore";
 import * as SecureStorage from "expo-secure-store";
 import { authApi } from "@/api/authApi";
+import axios from "axios";
 
 export default function RootLayout() {
   const router = useRouter();
@@ -40,7 +41,6 @@ export default function RootLayout() {
       try {
         setIsLoading(true);
         const refreshToken = await SecureStorage.getItemAsync("refreshToken");
-        console.log(refreshToken);
         
         if (refreshToken == null) {
           router.replace("/(auth)/authScreen");
@@ -58,6 +58,7 @@ export default function RootLayout() {
         }
       } catch (error: any) {
         console.log("Error: ", error.message);
+        router.replace("/(auth)/authScreen");
       } finally {
         setIsLoading(false);
       }
@@ -120,6 +121,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={DefaultTheme}>
       <Stack>
+        {/* add authorization step to this screen */}
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         {/* <Stack.Screen name="(auth)" options={{ headerShown: false }} /> */}
       </Stack>

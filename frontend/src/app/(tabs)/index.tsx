@@ -75,7 +75,7 @@ export default function FarmDashboard() {
 
           <Pressable
             className="flex flex-row items-center space-x-2 px-4 py-2.5 rounded-pill bg-primary active:opacity-90 shadow-sm"
-            onPress={() => router.push("/Screens/modifyNodeScreen")}
+            onPress={() => router.push("/Screens/scanQRCodeScreen")}
           >
             <Ionicons name="add" size={18} color="#ffffff" />
             <Text className="text-sm font-semibold tracking-tight text-white">
