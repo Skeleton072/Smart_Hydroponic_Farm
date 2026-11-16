@@ -19,6 +19,7 @@ import {
   ESPTransport,
   ESPSecurity,
 } from "@orbital-systems/react-native-esp-idf-provisioning";
+import { PermissionsAndroid } from "react-native";
 
 // Optional Wi-Fi listing library. Wrapped so the app still builds/works on
 // platforms where it's unavailable (iOS, or if not installed).
@@ -124,6 +125,50 @@ export default function WiFiConfigScreen() {
     setPassword("");
   };
 
+  const requestBluetoothPermissions = async (): Promise<boolean> => {
+    if (Platform.OS !== "android") return true;
+
+    try {
+      const permissions: Array<
+        (typeof PermissionsAndroid.PERMISSIONS)[keyof typeof PermissionsAndroid.PERMISSIONS]
+      > = [];
+
+      // Android 12 (API 31) and newer
+      if (Number(Platform.Version) >= 31) {
+        permissions.push(
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT
+        );
+      }
+
+      // Required by the provisioning library's permission check
+      permissions.push(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
+
+      const results = await PermissionsAndroid.requestMultiple(permissions);
+
+      const allGranted = permissions.every(
+        (permission) =>
+          results[permission] === PermissionsAndroid.RESULTS.GRANTED
+      );
+
+      if (!allGranted) {
+        Alert.alert(
+          "Permissions Required",
+          "Bluetooth and location permissions are required to discover and provision your ESP32. Please grant the requested permissions in Settings."
+        );
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Bluetooth permission error:", error);
+      return false;
+    }
+  };
+
+
   // ---------- Provisioning ----------
   const handleSubmit = async () => {
     if (!name || !pop) {
@@ -139,8 +184,16 @@ export default function WiFiConfigScreen() {
     let targetDevice: any = null;
 
     try {
-      const resolvedTransport =
-        transport === "softap" ? ESPTransport.softap : ESPTransport.ble;
+      const resolvedTransport = transport === "softap" ? ESPTransport.softap : ESPTransport.ble;
+
+      // Request Bluetooth permissions before BLE provisioning
+      if (resolvedTransport === ESPTransport.ble) {
+        const granted = await requestBluetoothPermissions();
+
+        if (!granted) {
+          return;
+        }
+      }
 
       const devices = await ESPProvisionManager.searchESPDevices(
         name,

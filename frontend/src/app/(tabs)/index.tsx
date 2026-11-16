@@ -66,7 +66,7 @@ export default function FarmDashboard() {
         <View className="px-6 mb-6 flex flex-row items-center justify-between">
           <View>
             <Text className="text-xl font-bold tracking-tight text-main">
-              Your Farm Nodes
+              Your Farm Nodes h
             </Text>
             <Text className="text-xs text-muted mt-0.5">
               Manage and monitor active units

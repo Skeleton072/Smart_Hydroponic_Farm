@@ -91,25 +91,29 @@ export default function ESP32QRScannerScreen() {
   }
 
   return (
-    <View className="flex-1 bg-black">
-      <Stack.Screen options={{ headerShown: false }} />
+    <>
+      <Stack.Screen options={{ headerShown: false }}/>
 
-      <CameraView
-        style={StyleSheet.absoluteFill}
-        facing="back"
-        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-        onBarcodeScanned={scanned ? undefined : onBarcodeScanned}
-      />
+      <View className="flex-1 bg-black">
+        {/* <Stack.Screen options={{ headerShown: false }} /> */}
 
-      {/* Centered scan frame – camera preview is dark, so overlay stays light-on-dark */}
-      <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-        <View className="w-[260px] h-[260px] border-2 border-white rounded-[24px] bg-transparent" />
-        <View className="absolute bottom-20 bg-white/90 px-5 py-3 rounded-xl">
-          <Text className="text-zinc-900 text-base text-center font-medium">
-            Place the device QR code inside the frame
-          </Text>
+        <CameraView
+          style={StyleSheet.absoluteFill}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+          onBarcodeScanned={scanned ? undefined : onBarcodeScanned}
+        />
+
+        {/* Centered scan frame – camera preview is dark, so overlay stays light-on-dark */}
+        <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
+          <View className="w-[260px] h-[260px] border-2 border-white rounded-[24px] bg-transparent" />
+          <View className="absolute bottom-20 bg-white/90 px-5 py-3 rounded-xl">
+            <Text className="text-zinc-900 text-base text-center font-medium">
+              Place the device QR code inside the frame
+            </Text>
+          </View>
         </View>
       </View>
-    </View>
+    </>
   );
 }
