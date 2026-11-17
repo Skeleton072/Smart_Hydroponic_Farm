@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -20,7 +20,6 @@ import {
   ESPSecurity,
 } from "@orbital-systems/react-native-esp-idf-provisioning";
 import { PermissionsAndroid } from "react-native";
-import { BluetoothStateManager } from "react-native-bluetooth-state-manager";
 
 // Optional Wi-Fi listing library. Wrapped so the app still builds/works on
 // platforms where it's unavailable (iOS, or if not installed).
@@ -39,15 +38,15 @@ type WifiNetwork = {
   security?: string;
 };
 
+// need to fix: when the password is incorrect, we should be able to restart provisioning without forcing ESP32 to reboot
+
 export default function WiFiConfigScreen() {
   const router = useRouter();
   const { name, pop, transport } = useLocalSearchParams<{
     name: string;
     pop: string;
-    transport: "ble" | "softap"; // only support ble
+    transport: "ble" | "softap";
   }>();
-
-  console.log(pop);
 
   const [ssid, setSsid] = useState("");
   const [password, setPassword] = useState("");
@@ -58,15 +57,11 @@ export default function WiFiConfigScreen() {
   const [isLoadingNetworks, setIsLoadingNetworks] = useState(false);
   const [networksError, setNetworksError] = useState<string | null>(null);
 
-  const isPasswordValid = useMemo(() => {
-    if (password.length < 8) return false;
-    return true;
-  }, [password]);
-
+  // ---------- Wi-Fi network discovery ----------
   const loadNetworks = useCallback(async () => {
     if (!WifiManager) {
       setNetworksError(
-        "Wi-Fi scanning isn't available on this build. Enter the network details manually.",
+        "Wi-Fi scanning isn't available on this build. Enter the network details manually."
       );
       return;
     }
@@ -82,11 +77,11 @@ export default function WiFiConfigScreen() {
       if (Platform.OS === "android") {
         const { PermissionsAndroid } = require("react-native");
         const ok = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
         if (ok !== PermissionsAndroid.RESULTS.GRANTED) {
           setNetworksError(
-            "Location permission is required to scan Wi-Fi networks.",
+            "Location permission is required to scan Wi-Fi networks."
           );
           return;
         }
@@ -102,7 +97,7 @@ export default function WiFiConfigScreen() {
         }
       }
       const cleaned = Array.from(map.values()).sort(
-        (a, b) => (b.level ?? -999) - (a.level ?? -999),
+        (a, b) => (b.level ?? -999) - (a.level ?? -999)
       );
       setNetworks(cleaned);
 
@@ -145,24 +140,26 @@ export default function WiFiConfigScreen() {
       if (Number(Platform.Version) >= 31) {
         permissions.push(
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT
         );
       }
 
       // Required by the provisioning library's permission check
-      permissions.push(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+      permissions.push(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
 
       const results = await PermissionsAndroid.requestMultiple(permissions);
 
       const allGranted = permissions.every(
         (permission) =>
-          results[permission] === PermissionsAndroid.RESULTS.GRANTED,
+          results[permission] === PermissionsAndroid.RESULTS.GRANTED
       );
 
       if (!allGranted) {
         Alert.alert(
           "Permissions Required",
-          "Bluetooth and location permissions are required to discover and provision your ESP32. Please grant the requested permissions in Settings.",
+          "Bluetooth and location permissions are required to discover and provision your ESP32. Please grant the requested permissions in Settings."
         );
         return false;
       }
@@ -174,16 +171,13 @@ export default function WiFiConfigScreen() {
     }
   };
 
+
   // ---------- Provisioning ----------
   const handleSubmit = async () => {
     if (!name || !pop) {
-      Alert.alert(
-        "Missing Device Info",
-        "Please scan the device QR code again.",
-      );
+      Alert.alert("Missing Device Info", "Please scan the device QR code again.");
       return;
     }
-
     if (!ssid.trim()) {
       Alert.alert("Missing SSID", "Please choose or enter a network name.");
       return;
@@ -193,91 +187,48 @@ export default function WiFiConfigScreen() {
     let targetDevice: any = null;
 
     try {
-      const resolvedTransport =
-        transport === "softap" ? ESPTransport.softap : ESPTransport.ble;
+      const resolvedTransport = transport === "softap" ? ESPTransport.softap : ESPTransport.ble;
 
+      // Request Bluetooth permissions before BLE provisioning
       if (resolvedTransport === ESPTransport.ble) {
-        // 1. Check Bluetooth status
-        const state = await BluetoothStateManager.getState();
-        if (state !== "PoweredOn") {
-          // 2. Request user to enable Bluetooth (Android will pop up system dialog)
-          // Note: On iOS, requestToEnable is unavailable and can only guide users to settings
-          if (Platform.OS === "android") {
-            try {
-              await BluetoothStateManager.requestToEnable();
-              // After enabling, it's recommended to recheck the status to ensure the user truly enabled it
-              const newState = await BluetoothStateManager.getState();
-              if (newState !== "PoweredOn") {
-                Alert.alert(
-                  "Bluetooth Required",
-                  "Please enable Bluetooth to continue provisioning.",
-                );
-                setIsSubmitting(false); // Need to reset status here
-                return;
-              }
-            } catch (error) {
-              Alert.alert(
-                "Permission Denied",
-                "Unable to request Bluetooth enable.",
-              );
-              setIsSubmitting(false);
-              return;
-            }
-          } else {
-            // iOS handling
-            Alert.alert(
-              "Bluetooth Required",
-              "Please enable Bluetooth in Settings to continue.",
-              [
-                {
-                  text: "Cancel",
-                  style: "cancel",
-                  onPress: () => setIsSubmitting(false),
-                },
-                {
-                  text: "Open Settings",
-                  onPress: () => BluetoothStateManager.openSettings(),
-                },
-              ],
-            );
-            return;
-          }
-        }
-
-        // 3. Request permission (keep your original logic)
         const granted = await requestBluetoothPermissions();
+
         if (!granted) {
-          return; // Note: setIsSubmitting is already handled in finally, but can be explicitly returned here
+          return;
         }
       }
 
       const devices = await ESPProvisionManager.searchESPDevices(
         name,
         resolvedTransport,
-        ESPSecurity.secure,
+        ESPSecurity.secure
       );
 
       if (!devices || devices.length === 0) {
         throw new Error(
-          "ESP32 device not found nearby. Make sure Bluetooth/Wi-Fi is on and the device is powered.",
+          "ESP32 device not found nearby. Make sure Bluetooth/Wi-Fi is on and the device is powered."
         );
       }
 
       targetDevice = devices[0];
       await targetDevice.connect(pop);
-      await targetDevice.provision(ssid.trim(), password);
-
-      router.replace("/Screens/modifyNodeScreen");
+      
+      try {
+        await targetDevice.provision(ssid.trim(), password);
+        router.replace("/Screens/modifyNodeScreen");
+      } catch (e: any) {
+        console.log("incorrect password.");
+      }
     } catch (error: any) {
       if (error?.message === "TIMEOUT") {
         Alert.alert(
           "Connection Timed Out",
-          "The device could not connect to the Wi-Fi network. Please check the SSID and password and try again.",
+          "The device could not connect to the Wi-Fi network. Please check the SSID and password and try again."
         );
       } else {
         Alert.alert(
           "Provisioning Failed",
-          error?.message || "An unknown error occurred.",
+          error?.message || "An unknown error occurred."
         );
       }
     } finally {
@@ -300,7 +251,9 @@ export default function WiFiConfigScreen() {
         onPress={() => selectNetwork(item)}
         disabled={isSubmitting}
         className={`flex-row items-center justify-between px-4 py-3 mb-2 rounded-xl border ${
-          isSelected ? "bg-blue-50 border-blue-500" : "bg-white border-zinc-200"
+          isSelected
+            ? "bg-blue-50 border-blue-500"
+            : "bg-white border-zinc-200"
         }`}
       >
         <View className="flex-1 mr-3">
@@ -313,158 +266,143 @@ export default function WiFiConfigScreen() {
         </View>
         {typeof item.level === "number" && (
           <Text className="text-zinc-500 text-xs">
-            {item.level > -55
-              ? "📶 Strong"
-              : item.level > -70
-                ? "📶 OK"
-                : "📶 Weak"}
+            {item.level > -55 ? "📶 Strong" : item.level > -70 ? "📶 OK" : "📶 Weak"}
           </Text>
         )}
       </TouchableOpacity>
     );
   };
 
+  // Keyboard is not avoiding the view
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-zinc-50"
-    >
-      <Stack.Screen
-        options={{
-          title: "Wi-Fi Setup",
-          headerStyle: { backgroundColor: "#ffffff" },
-          headerTintColor: "#111827",
-          headerShadowVisible: false,
-        }}
-      />
+    <>
+      <Stack.Screen options={{ headerShown: false }}/>
 
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={isLoadingNetworks}
-            onRefresh={loadNetworks}
-          />
-        }
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1 bg-zinc-50"
       >
-        <View className="px-6 pt-6">
-          <Text className="text-zinc-900 text-2xl font-bold mb-1">
-            Connect to Wi-Fi
-          </Text>
-          <Text className="text-zinc-500 text-sm mb-6">
-            Configuring device:{" "}
-            <Text className="text-zinc-900 font-semibold">
-              {name || "Unknown"}
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={isLoadingNetworks} onRefresh={loadNetworks} />
+          }
+        >
+          <View className="px-6 pt-6">
+            <Text className="text-zinc-900 text-2xl font-bold mb-1">
+              Connect to Wi-Fi
             </Text>
-          </Text>
-
-          {/* ---------- Nearby networks ---------- */}
-          <Text className="text-zinc-800 text-sm font-semibold mb-2">
-            Nearby Networks
-          </Text>
-
-          {isLoadingNetworks && networks.length === 0 ? (
-            <View className="py-6 items-center">
-              <ActivityIndicator color="#2563eb" />
-              <Text className="text-zinc-500 text-sm mt-2">Scanning…</Text>
-            </View>
-          ) : networksError ? (
-            <View className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-              <Text className="text-amber-800 text-sm">{networksError}</Text>
-              <TouchableOpacity
-                onPress={loadNetworks}
-                className="mt-2 self-start"
-              >
-                <Text className="text-blue-600 font-medium text-sm">Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : networks.length === 0 ? (
-            <View className="bg-white border border-zinc-200 rounded-xl p-4 mb-6">
-              <Text className="text-zinc-500 text-sm">
-                No networks found. Pull to refresh, or enter details manually
-                below.
+            <Text className="text-zinc-500 text-sm mb-6">
+              Configuring device:{" "}
+              <Text className="text-zinc-900 font-semibold">
+                {name || "Unknown"}
               </Text>
-            </View>
-          ) : (
-            <View className="mb-6">
-              <FlatList
-                data={networks}
-                keyExtractor={(n) => n.BSSID || n.SSID}
-                renderItem={renderNetwork}
-                scrollEnabled={false} // parent ScrollView handles scrolling
-              />
-            </View>
-          )}
-
-          {/* ---------- Manual entry ---------- */}
-          {/* <Text className="text-zinc-800 text-sm font-semibold mb-3 mt-2">
-            Or enter manually
-          </Text> */}
-
-          <View className="mb-4">
-            <Text className="text-zinc-600 text-sm font-medium mb-2">
-              Network Name (SSID)
             </Text>
-            <TextInput
-              className="bg-white border border-zinc-300 text-zinc-900 px-4 py-4 rounded-xl text-base"
-              placeholder="e.g. MyHomeWiFi"
-              placeholderTextColor="#a1a1aa"
-              value={ssid}
-              onChangeText={setSsid}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isSubmitting}
-            />
-          </View>
 
-          <View className="mb-6">
-            <Text className="text-zinc-600 text-sm font-medium mb-2">
-              Password
+            {/* ---------- Nearby networks ---------- */}
+            <Text className="text-zinc-800 text-sm font-semibold mb-2">
+              Nearby Networks
             </Text>
-            <View className="relative justify-center">
+
+            {isLoadingNetworks && networks.length === 0 ? (
+              <View className="py-6 items-center">
+                <ActivityIndicator color="#2563eb" />
+                <Text className="text-zinc-500 text-sm mt-2">Scanning…</Text>
+              </View>
+            ) : networksError ? (
+              <View className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+                <Text className="text-amber-800 text-sm">{networksError}</Text>
+                <TouchableOpacity onPress={loadNetworks} className="mt-2 self-start">
+                  <Text className="text-blue-600 font-medium text-sm">Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : networks.length === 0 ? (
+              <View className="bg-white border border-zinc-200 rounded-xl p-4 mb-6">
+                <Text className="text-zinc-500 text-sm">
+                  No networks found. Pull to refresh, or enter details manually below.
+                </Text>
+              </View>
+            ) : (
+              <View className="mb-6">
+                <FlatList
+                  data={networks}
+                  keyExtractor={(n) => n.BSSID || n.SSID}
+                  renderItem={renderNetwork}
+                  scrollEnabled={false} // parent ScrollView handles scrolling
+                />
+              </View>
+            )}
+
+            {/* ---------- Manual entry ---------- */}
+            <Text className="text-zinc-800 text-sm font-semibold mb-3 mt-2">
+              Or enter manually
+            </Text>
+
+            <View className="mb-4">
+              <Text className="text-zinc-600 text-sm font-medium mb-2">
+                Network Name (SSID)
+              </Text>
               <TextInput
-                className="bg-white border border-zinc-300 text-zinc-900 px-4 py-4 rounded-xl text-base pr-16"
-                placeholder="Enter network password"
+                className="bg-white border border-zinc-300 text-zinc-900 px-4 py-4 rounded-xl text-base"
+                placeholder="e.g. MyHomeWiFi"
                 placeholderTextColor="#a1a1aa"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
+                value={ssid}
+                onChangeText={setSsid}
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!isSubmitting}
               />
-              <TouchableOpacity
-                className="absolute right-4"
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Text className="text-blue-600 font-medium">
-                  {showPassword ? "Hide" : "Show"}
-                </Text>
-              </TouchableOpacity>
+            </View>
+
+            <View className="mb-6">
+              <Text className="text-zinc-600 text-sm font-medium mb-2">
+                Password
+              </Text>
+              <View className="relative justify-center">
+                <TextInput
+                  className="bg-white border border-zinc-300 text-zinc-900 px-4 py-4 rounded-xl text-base pr-16"
+                  placeholder="Enter network password"
+                  placeholderTextColor="#a1a1aa"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isSubmitting}
+                />
+                <TouchableOpacity
+                  className="absolute right-4"
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Text className="text-blue-600 font-medium">
+                    {showPassword ? "Hide" : "Show"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
 
-      {/* Sticky footer button */}
-      <View className="px-6 pb-8 pt-3 bg-zinc-50">
-        <TouchableOpacity
-          className={`py-4 rounded-xl items-center justify-center ${
-            isSubmitting ? "bg-blue-400" : "bg-blue-600 active:bg-blue-700"
-          }`}
-          onPress={handleSubmit}
-          disabled={isSubmitting || !isPasswordValid}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text className="text-white font-semibold text-base">
-              Send Credentials
-            </Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+        {/* Sticky footer button */}
+        <View className="px-6 pb-8 pt-3 bg-zinc-50">
+          <TouchableOpacity
+            className={`py-4 rounded-xl items-center justify-center ${
+              isSubmitting ? "bg-blue-400" : "bg-blue-600 active:bg-blue-700"
+            }`}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text className="text-white font-semibold text-base">
+                Send Credentials
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </>
   );
 }
