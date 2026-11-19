@@ -17,8 +17,8 @@ import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
 import DeleteConfirmationModal from "../(modals)/deleteConfirmationModal";
 import { useState } from "react";
-import { deleteNode } from "@/services/farmNodeServices";
 import { FarmNodeTypes } from "../(types)/NodeDataType";
+import { farmNodeApi } from "@/api/farmNodeApi";
 
 const imageMap: Record<string, any> = {
   "salad.jpg": require("@/assets/images/salad.jpg"),
@@ -45,12 +45,7 @@ export default function NodeDetailScreen() {
   async function handleDeleteNode() {
     try {
       setIsDeleting(true);
-      const status = await deleteNode(node!.node_id);
-
-      if (status != 200) {
-        console.log("Some error happened.");
-        return;
-      }
+      const status = await farmNodeApi.deleteNode(node!.node_id);
 
       removeNode(node!.node_id);
       setIsDeleteModalVisible(false);

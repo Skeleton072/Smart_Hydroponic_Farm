@@ -13,12 +13,13 @@ export const farmNodeApi = {
   },
 
   updateNode: async (payload: FarmNodeTypes) => {
-    const response = await apiClient.post("/api/node/updateNode", payload);
+    const response = await apiClient.patch("/api/node/updateNode", payload);
     return response.status;
   },
 
   deleteNode: async (node_id: string) => {
-    const response = await apiClient.post("/api/node/deleteNode", node_id);
+    console.log("deleteNode: ", node_id);
+    const response = await apiClient.delete(`/api/node/deleteNode/${node_id}`);
     return response.status;
   }
 };

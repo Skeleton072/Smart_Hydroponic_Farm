@@ -4,12 +4,13 @@ const crypto = require("crypto");
 const redisClient = require("../config/redis")
 
 async function generateAccessToken(payload) {
-  const accessToken = jwt.sign(
+  const accessToken = await jwt.sign(
     payload,
     config.jwt.accessTokenSecret,
     { expiresIn: config.jwt.accessTTLSeconds, algorithm: "HS256" }
   );
 
+  console.log("tokenHandling.js: ", accessToken);
   return accessToken;
 }
 

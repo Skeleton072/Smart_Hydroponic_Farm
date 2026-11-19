@@ -198,6 +198,8 @@ export default function WiFiConfigScreen() {
         }
       }
 
+      console.log('Name: ', name);
+
       const devices = await ESPProvisionManager.searchESPDevices(
         name,
         resolvedTransport,

@@ -34,6 +34,9 @@ export default function FarmDashboard() {
   const isSensorsLoading = useSensorStore((state) => state.loading);
   const sensorReadings = useSensorStore((state) => state.sensorReadings);
 
+  console.log(isNodesLoading);
+  console.log(farmNodes);
+
   if (isNodesLoading) {
     return (
       <SafeAreaView className="flex-1 bg-background">
@@ -75,7 +78,7 @@ export default function FarmDashboard() {
 
           <Pressable
             className="flex flex-row items-center space-x-2 px-4 py-2.5 rounded-pill bg-primary active:opacity-90 shadow-sm"
-            onPress={() => router.push("/Screens/scanQRCodeScreen")}
+            onPress={() => router.push("/Screens/modifyNodeScreen")}
           >
             <Ionicons name="add" size={18} color="#ffffff" />
             <Text className="text-sm font-semibold tracking-tight text-white">
@@ -85,7 +88,7 @@ export default function FarmDashboard() {
         </View>
 
         {/* Farm Nodes List */}
-        {/* <View>
+        <View>
           {isNodesLoading ? (
             <View className="flex-1 justify-center items-center">
               <ActivityIndicator size="large" color="#0000ff" />
@@ -94,19 +97,19 @@ export default function FarmDashboard() {
           ) : (
             farmNodes.map((node, idx) => (
               <View key={idx}>
-                <FarmNode name={node.node_name} imageUrl="salad.jpg" />
+                <FarmNode node={node} name={node.node_name} imageUrl="salad.jpg" sensorReadings={sensorReadings[node.node_id]} isSensorsLoading={isSensorsLoading}/>
               </View>
             ))
           )}
-        </View> */}
+        </View>
 
-        <View>
-          {farmNodes.map((node, idx) => (
+        {/* <View>
+          {farmNodes.length > 0 && farmNodes.map((node, idx) => (
             <View key={idx}>
               <FarmNode node={node} name={node.node_name} imageUrl="salad.jpg" sensorReadings={sensorReadings[node.node_id]} isSensorsLoading={isSensorsLoading}/>
             </View>
           ))}
-        </View>
+        </View> */}
       </ScrollView>
     </SafeAreaView>
   );

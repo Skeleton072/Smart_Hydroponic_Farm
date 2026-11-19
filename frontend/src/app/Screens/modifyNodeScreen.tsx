@@ -14,9 +14,11 @@ import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { useFarmNodeStore } from "@/store/farmNodeStore";
-import { addNewNode, updateNode } from "@/services/farmNodeServices";
+import { farmNodeApi } from '@/api/farmNodeApi';
 import ConfirmationModal from "../(modals)/showMessageModal";
 import { FarmNodeTypes, NumericSensorKey , FarmNodeUploadTypes} from "../(types)/NodeDataType";
+import * as SecureStorage from 'expo-secure-store';
+
 
 const INITIAL_SENSORS = [
   {
@@ -127,7 +129,7 @@ export default function FarmNodeForm() {
       return;
     }
     
-    const parsedData: Record<string, any> = { ...nodeData };
+    const parsedData: FarmNodeTypes = { ...nodeData };
 
     requiredKeys.map((key, idx) => {
       let val = nodeData[key];
@@ -145,19 +147,19 @@ export default function FarmNodeForm() {
         return;
       }
 
-      parsedData[key] = numericVal;
+      parsedData[key] = numericVal as never;
     });
 
     // 4. Check if data values are physically reasonable/realistic
     const isReasonable =
-      parsedData.min_temperature >= -50 &&
-      parsedData.max_temperature <= 100 && // Temperature: -50°C to 100°C
-      parsedData.min_humidity >= 0 &&
-      parsedData.max_humidity <= 100 && // Humidity: 0% to 100%
-      parsedData.min_pH >= 0 &&
-      parsedData.max_pH <= 14 && // pH scale: 0 to 14
-      parsedData.min_tds >= 0 &&
-      parsedData.max_tds >= 0; // TDS: Cannot be negative
+      Number(parsedData.min_temperature) >= -50 &&
+      Number(parsedData.max_temperature) <= 100 && // Temperature: -50°C to 100°C
+      Number(parsedData.min_humidity) >= 0 &&
+      Number(parsedData.max_humidity) <= 100 && // Humidity: 0% to 100%
+      Number(parsedData.min_pH) >= 0 &&
+      Number(parsedData.max_pH) <= 14 && // pH scale: 0 to 14
+      Number(parsedData.min_tds) >= 0 &&
+      Number(parsedData.max_tds) >= 0; // TDS: Cannot be negative
 
     if (!isReasonable) {
       setIsMessageModalVisible(true);
@@ -180,21 +182,21 @@ export default function FarmNodeForm() {
     }
 
     if (params.node_id) {
-      const status = await updateNode(nodeData);
+      const status = await farmNodeApi.updateNode({...parsedData});
       setIsSaving(false);
 
       if (status == 200) {
-        updateNodeToStore(nodeData);
+        updateNodeToStore(parsedData);
         router.back();
       }
     } else {
-      const { node_id, ...rest } = nodeData;
-      const res = await addNewNode(rest);
+      const { node_id, ...rest } = parsedData;
+      const res = await farmNodeApi.addNewNode(rest);
       setIsSaving(false);
 
       if (res?.status == 200) {
-        addNodeToStore({ ...nodeData, node_id: res.node_id });
-        router.back();
+        addNodeToStore({ ...parsedData, node_id: res.node_id });
+        router.replace("/(tabs)");
       }
     }
   };

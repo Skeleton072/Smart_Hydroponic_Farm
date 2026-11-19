@@ -45,6 +45,7 @@ async function addNewNode(req, res) {
  */
 async function getAllNodes(req, res) {
   try {
+    console.log(req.user.user_id);
     const nodes = await nodeService.listNodes(req.user.user_id);
     return res.status(200).json({ data: nodes });
   } catch (error) {
@@ -57,7 +58,7 @@ async function getAllNodes(req, res) {
  */
 async function updateNode(req, res) {
   try {
-    const node = await nodeService.updateNode(req.params.node_id, req.body, req.user.user_id);
+    const node = await nodeService.updateNode(req.body, req.user.user_id);
     return res.status(200).json({ message: "Node updated.", node });
   } catch (err) {
     return handleError(res, err, "updateNode");
@@ -69,6 +70,7 @@ async function updateNode(req, res) {
  */
 async function deleteNode(req, res) {
   try {
+    console.log("Deleting node...");
     await nodeService.deleteNode(req.params.node_id, req.user.user_id);
     return res.status(204).end();
   } catch (err) {

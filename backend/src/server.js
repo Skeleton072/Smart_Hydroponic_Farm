@@ -26,7 +26,7 @@ app.get("/api/testing", (req, res) => {
 });
 
 // web socket
-const wss = new WebSocket.Server({ port: 8160 });
+const wss = new WebSocket.Server({ port: 3001 });
 
 wss.on("connection", async (socket) => {
   console.log("WebSocket has started...");

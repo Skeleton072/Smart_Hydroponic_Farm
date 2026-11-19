@@ -1,25 +1,17 @@
 import axios, { AxiosError } from "axios";
+import { ApiError } from "./client";
 
-const http = axios.create({ 
-  baseURL: process.env.EXPO_PUBLIC_SERVER, 
-  timeout: 15000, 
+export const authClient = axios.create({
+  baseURL: process.env.EXPO_PUBLIC_SERVER,
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   }
 });
 
-export interface AuthTokens { accessToken: string; refreshToken: string; }
-
-export class ApiError extends Error {
-  status: number;
-  code?: string;
-  retryAfter?: number;
-  constructor(status: number, message: string, code?: string, retryAfter?: number) {
-    super(message);
-    this.status = status;
-    this.code = code;
-    this.retryAfter = retryAfter;
-  }
+export interface AuthTokens { 
+  accessToken: string; 
+  refreshToken: string; 
 }
 
 function normalize(err: unknown): ApiError {
@@ -43,20 +35,20 @@ async function request<T>(fn: () => Promise<{ status: number; data: T }>): Promi
 
 export const authApi = {
   login: (body: { email: string; password: string }) =>
-    request(() => http.post<AuthTokens>("/api/auth/login", body)),
+    request(() => authClient.post<AuthTokens>("/api/auth/login", body)),
 
   signup: (body: { user_name: string; email: string; password: string }) =>
-    request(() => http.post<{ message: string }>("/api/auth/signup", body)),
+    request(() => authClient.post<{ message: string }>("/api/auth/signup", body)),
 
   verifyOtp: (body: { email: string; otp: string }) =>
-    request(() => http.post<AuthTokens>("/api/auth/verifyOTP", body)),
+    request(() => authClient.post<AuthTokens>("/api/auth/verifyOTP", body)),
 
   resendOtp: (body: { email: string }) =>
-    request(() => http.post<{ message: string }>("/api/auth/resendOTP", body)),
+    request(() => authClient.post<{ message: string }>("/api/auth/resendOTP", body)),
 
   refresh: (body: { refreshToken: string }) =>
-    request(() => http.post<AuthTokens>("/api/auth/refresh", body)),
+    request(() => authClient.post<AuthTokens>("/api/auth/refresh", body)),
 
   logout: (body: { refreshToken: string }) =>
-    request(() => http.post<void>("/auth/logout", body)),
+    request(() => authClient.post<void>("/auth/logout", body)),
 };

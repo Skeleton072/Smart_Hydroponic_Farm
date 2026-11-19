@@ -45,6 +45,7 @@ async function signup(req, res) {
 // POST /auth/login
 async function login(req, res) {
   try {
+    console.log(req.body);
     const { email, password } = req.body ?? {};
     console.log("email", email);
 
@@ -124,6 +125,7 @@ async function refresh(req, res) {
     if (execResult.some(([err]) => err)) throw serviceError(CODES.INTERNAL);
 
     const tokens = await issueSession(user_id);
+    
     return res.status(200).json(tokens);
   } catch (err) {
     return sendError(res, err, "refresh");

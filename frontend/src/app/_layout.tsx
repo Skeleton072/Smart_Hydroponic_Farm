@@ -10,11 +10,11 @@ import { useFarmNodeStore } from "@/store/farmNodeStore";
 // import { useAuthStore } from "@/store/authStore";
 import { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
-import { getAllFarmNodes } from "@/services/farmNodeServices";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useSensorStore } from "@/store/sensorStore";
 import * as SecureStorage from "expo-secure-store";
 import { authApi } from "@/api/authApi";
+import { farmNodeApi } from "@/api/farmNodeApi";
 import axios from "axios";
 
 export default function RootLayout() {
@@ -27,6 +27,7 @@ export default function RootLayout() {
   const setInitialized = useFarmNodeStore((state) => state.setInitialized);
   const nodes = useFarmNodeStore((state) => state.nodes);
 
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Sensor store state
@@ -49,6 +50,7 @@ export default function RootLayout() {
 
         const { status, data } = await authApi.refresh({ refreshToken });
         if (status == 200) {
+          setIsAuthenticated(true);
           await SecureStorage.setItemAsync("accessToken", data.accessToken);
           await SecureStorage.setItemAsync("refreshToken", data.refreshToken);
 
@@ -67,35 +69,36 @@ export default function RootLayout() {
     checkAuth();
   }, []);
 
-  // useEffect(() => {
-  //   if (!userId || initialized) return;
+  useEffect(() => {
+    if (!isAuthenticated) return;
 
-  //   let active = true;
+    let active = true;
 
-  //   async function initialize() {
-  //     setLoadingNodes(true);
-  //     setLoadingSensors(true);
-  //     try {
-  //       const fetchedNodes = await getAllFarmNodes();
-  //       if (active) {
-  //         setNodes(fetchedNodes);
-  //         setInitialized(true);
-  //       }
-  //     } catch (error) {
-  //       console.error("Failed to load farm nodes:", error);
-  //     } finally {
-  //       if (active) {
-  //         setLoadingNodes(false);
-  //       }
-  //     }
-  //   }
+    async function initialize() {
+      setLoadingNodes(true);
+      setLoadingSensors(true);
+      try {
+        const fetchedNodes = await farmNodeApi.getAllFarmNodes();
+        console.log("_layout.tsx: ", fetchedNodes);
+        if (active) {
+          setNodes(fetchedNodes);
+          setInitialized(true);
+        }
+      } catch (error) {
+        console.error("Failed to load farm nodes:", error);
+      } finally {
+        if (active) {
+          setLoadingNodes(false);
+        }
+      }
+    }
 
-  //   initialize();
+    initialize();
 
-  //   return () => {
-  //     active = false;
-  //   };
-  // }, [userId, initialized]);
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, initialized]);
 
   // useEffect(() => {
   //   if (isConnected && initialized && nodes.length > 0) {

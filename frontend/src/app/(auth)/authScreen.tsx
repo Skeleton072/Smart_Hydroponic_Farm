@@ -12,7 +12,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import LoadingModal from "../(modals)/loadingModal";
-import { authApi, ApiError } from "@/api/authApi";
+import { authApi } from "@/api/authApi";
+import { ApiError } from "@/api/client";
 import * as SecureStore from "expo-secure-store";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -124,14 +125,7 @@ export default function AuthScreen() {
         });
       }
     } catch (err) {
-      // If signup itself is rate-limited (server returns 429 + retryAfter), show countdown here too.
-      if (err instanceof ApiError && err.status === 429 && err.retryAfter) {
-        setLockUntil(Date.now() + err.retryAfter * 1000);
-        setNow(Date.now());
-        setServerError("");
-      } else {
-        setServerError(getErrorMessage(err));
-      }
+      setServerError(getErrorMessage(err));
     } finally {
       setIsLoading(false);
     }

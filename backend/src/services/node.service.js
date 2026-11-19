@@ -58,12 +58,12 @@ function validateNodePayload(body, { partial = false } = {}) {
   return payload;
 }
 
-async function createNode(body) {
+async function createNode(body, user_id) {
   const payload = validateNodePayload(body);
 
   const { data, error } = await supabase
     .from(TABLE)
-    .insert({...payload, })
+    .insert({...payload, user_id })
     .select()
     .single();
 
@@ -71,20 +71,20 @@ async function createNode(body) {
   return data.node_id;
 }
 
-async function listNodes(ownerId) {
+async function listNodes(user_id) {
   const { data, error } = await supabase
     .from(TABLE)
     .select(
       "node_id, node_name, min_temperature, max_temperature, min_humidity, max_humidity, min_pH, max_pH, min_tds, max_tds"
     )
-    .eq("owner_id", ownerId);
+    .eq("user_id", user_id);
 
   if (error) throw mapSupabaseError(error, "listNodes");
   return data;
 }
 
-async function updateNode(nodeId, body, ownerId) {
-  assertUuid(nodeId);
+async function updateNode(body, user_id) {
+  assertUuid(body.node_id);
   const payload = validateNodePayload(body, { partial: true });
 
   if (Object.keys(payload).length === 0) {
@@ -96,8 +96,8 @@ async function updateNode(nodeId, body, ownerId) {
   const { data, error } = await supabase
     .from(TABLE)
     .update(payload)
-    .eq("node_id", nodeId)
-    .eq("owner_id", ownerId)     // ownership enforced in the query
+    .eq("node_id", body.node_id)
+    .eq("user_id", user_id)     // ownership enforced in the query
     .select()
     .maybeSingle();              // maybeSingle: null when no row matched
 
@@ -106,14 +106,14 @@ async function updateNode(nodeId, body, ownerId) {
   return data;
 }
 
-async function deleteNode(nodeId, ownerId) {
+async function deleteNode(nodeId, user_id) {
   assertUuid(nodeId);
 
   const { data, error } = await supabase
     .from(TABLE)
     .delete()
     .eq("node_id", nodeId)
-    .eq("owner_id", ownerId)
+    .eq("user_id", user_id)
     .select("node_id")
     .maybeSingle();
 

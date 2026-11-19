@@ -5,7 +5,7 @@ const { requireAuth } = require("../middlewares/node.middleware");
 const nodeRouter = express.Router();
 
 nodeRouter.post('/addNewNode', requireAuth, addNewNode);
-nodeRouter.patch('/updateNode/:node_id', requireAuth, updateNode);
+nodeRouter.patch('/updateNode', requireAuth, updateNode);
 nodeRouter.get('/getAllNodes', requireAuth, getAllNodes);
 nodeRouter.delete('/deleteNode/:node_id', requireAuth, deleteNode);
 
